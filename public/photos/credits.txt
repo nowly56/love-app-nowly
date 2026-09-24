@@ -1,0 +1,12 @@
+Demonstration photographs: Unsplash (images.unsplash.com).
+Retrieved using the public image CDN i0.wp.com; no personal user photographs.
+
+anya.jpg: photo-1524504388940-b1c1722653e1
+sasha.jpg: photo-1500648767791-00dcc994a43e
+seaside.jpg: photo-1533105079780-92b9be482077
+sunset.jpg: photo-1473116763249-2faaef81ccda
+coffee.jpg: photo-1442512595331-e89e73853f31
+mountains.jpg: photo-1464822759023-fed622ff2c3b
+picnic.jpg: photo-1506784983877-45594efa4cbe
+together.jpg: photo-1516589178581-6cd7833ae3b2
+lake.jpg: photo-1476514525535-07fb3b4ae5f1

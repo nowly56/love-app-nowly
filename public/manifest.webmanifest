@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "ближе — наше маленькое счастье",
+  "short_name": "ближе",
+  "description": "Ваше личное пространство: памятные моменты, важные даты и планы вдвоём.",
+  "lang": "ru",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f8f7fa",
+  "theme_color": "#f5f2f8",
+  "categories": ["lifestyle"],
+  "icons": [
+    { "src": "/app-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/app-icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
