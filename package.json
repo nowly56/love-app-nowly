@@ -11,7 +11,7 @@
     "build": "tsc -b && vite build",
     "start": "node server/start.mjs",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "node --experimental-strip-types --test tests/data.test.ts tests/api.test.mjs"
+    "test": "node --experimental-strip-types --test tests/data.test.ts tests/api.test.mjs tests/bot.test.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",

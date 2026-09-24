@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { extname, resolve, sep } from 'node:path';
 import { createApi } from './api.mjs';
+import { createTelegramBot } from './bot.mjs';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 
@@ -9,6 +10,7 @@ const root = resolve('dist');
 const index = resolve(root, 'index.html');
 const port = Number(process.env.PORT) || 4173;
 const api = createApi();
+const bot = createTelegramBot();
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
@@ -25,6 +27,10 @@ const contentTypes = {
 };
 
 const server = createServer(async (req, res) => {
+  if (req.url?.split('?')[0] === '/bot/webhook') {
+    await bot.handle(req, res);
+    return;
+  }
   if (req.url?.startsWith('/api/')) {
     await api.middleware(req, res, () => { res.writeHead(404).end(); });
     return;
@@ -56,5 +62,5 @@ const server = createServer(async (req, res) => {
   else createReadStream(filename).pipe(res);
 });
 
-server.listen(port, '0.0.0.0', () => console.log(`Ближе запущен на порту ${port}`));
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.close(() => { api.close(); process.exit(0); }));
+server.listen(port, '0.0.0.0', () => { console.log(`Ближе запущен на порту ${port}`); void bot.start(); });
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { bot.stop(); server.close(() => { api.close(); process.exit(0); }); });
