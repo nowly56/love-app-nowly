@@ -174,7 +174,7 @@ export function createApi({ filename = process.env.DATABASE_PATH || resolve(proc
             const id = randomUUID(), space = randomUUID();
             const name = [telegramUser.first_name, telegramUser.last_name].filter(part => typeof part === 'string').join(' ').trim().slice(0, 25) || 'Любимый человек';
             const profile = { id, name, birthday: '', bio: '', avatar: '' };
-            const data = { startDate: new Date().toISOString().slice(0, 10), memories: [], dates: [], plans: [], messages: [], mood: '' };
+            const data = { startDate: new Date().toISOString().slice(0, 10), memories: [], dates: [], plans: [], messages: [], mood: '', moodBy: '' };
             // Keep the existing database layout for old accounts. These private values are never used for sign-in.
             const internalEmail = `telegram-${telegramUser.id}@telegram.blizhe.invalid`;
             db.exec('BEGIN');
@@ -200,7 +200,7 @@ export function createApi({ filename = process.env.DATABASE_PATH || resolve(proc
           if (db.prepare('SELECT id FROM users WHERE email=?').get(email)) fail(409, 'Регистрация недоступна. Попробуйте войти или восстановить доступ');
           const id = randomUUID(), space = randomUUID(), recoveryCode = secret();
           const profile = { id, name, birthday: '', bio: '', avatar: '' };
-          const data = { startDate: new Date().toISOString().slice(0,10), memories: [], dates: [], plans: [], messages: [], mood: '' };
+          const data = { startDate: new Date().toISOString().slice(0,10), memories: [], dates: [], plans: [], messages: [], mood: '', moodBy: '' };
           db.exec('BEGIN');
           try {
             db.prepare('INSERT INTO spaces(id,data) VALUES(?,?)').run(space, JSON.stringify(data));
@@ -274,6 +274,10 @@ export function createApi({ filename = process.env.DATABASE_PATH || resolve(proc
         const input = body.data;
         if (!input || typeof input !== 'object') fail(400,'Некорректные данные');
         const data = {startDate:date(input.startDate),mood:text(input.mood,50)};
+        const priorMoodBy = current.data.moodBy || '';
+        data.moodBy = data.mood !== current.data.mood || input.moodBy === user.id
+          ? user.id
+          : priorMoodBy;
         if (data.startDate > new Date().toISOString().slice(0,10)) fail(400,'Дата начала отношений не может быть в будущем');
         const readList = (key, parse, max=2000) => {
           if (!Array.isArray(input[key]) || input[key].length>max) fail(400,'Слишком много записей');

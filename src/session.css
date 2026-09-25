@@ -1,28 +1,17 @@
-.session-screen { min-height: 100dvh; padding: 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; text-align: center; color: var(--accent); background: radial-gradient(ellipse at 70% 25%, #efccd85e, transparent 65%), #f8f4f0; }
+.session-screen {
+  min-height: 100dvh;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  text-align: center;
+  color: var(--accent);
+  background: linear-gradient(165deg, #fdfbfa, #ecd8c9);
+}
 .session-screen h1 { color: var(--ink); font-family: var(--serif); font-weight: 400; font-size: 38px; }
 .session-screen p { max-width: 380px; color: #78636d; font-size: 14px; line-height: 1.7; }
 .session-heart { animation: session-pulse 1.6s ease-in-out infinite; }
 @keyframes session-pulse { 50% { transform: scale(1.1); opacity: .6; } }
-.connection-notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 24px; background: #fff0db; border: 1px solid #e6ceb5; border-radius: 16px; padding: 14px 18px; font-size: 12px; color: #715037; }
-.connection-notice button { text-decoration: underline; font-weight: 700; }
-.welcome-card { margin-bottom: 25px; padding: 24px; display: flex; align-items: center; gap: 20px; border-radius: 23px; border: 1px solid #fff; background: linear-gradient(110deg, #f3dce3bd, #fff9); }
-.welcome-card > svg { color: var(--accent); flex-shrink: 0; }
-.welcome-card h2 { font-size: 16px; margin-bottom: 7px; }
-.welcome-card p { font-size: 12px; line-height: 1.6; color: #826871; }
-.welcome-card button { margin-left: auto; flex-shrink: 0; }
-.profile-export { margin-top: 25px; padding: 22px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 15px; }
-.profile-export p { font-size: 12px; color: var(--muted); }
-.chat-empty { min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; color: #997988; }
-.chat-empty p { font-size: 12px; line-height: 1.6; max-width: 260px; }
-.sender-label strong { color: var(--accent); font-weight: 600; }
-.chat-panel .sender-label { align-items: center; }
-.moments-preview:has(> :only-child) { grid-template-columns: 1fr; }
-.moments-preview > .add-memory-card:only-child { min-height: 200px; background: linear-gradient(120deg, #ecd3de66, #f7e7d977); }
-.modal[aria-busy="true"] { cursor: progress; }
-@media (max-width: 700px) {
-  .welcome-card { padding: 19px; gap: 12px; flex-wrap: wrap; }
-  .welcome-card > div { flex: 1; min-width: 190px; }
-  .welcome-card button { margin-left: 0; }
-  .welcome-card p { font-size: 11px; }
-}
 @media (prefers-reduced-motion: reduce) { .session-heart { animation: none; } }

@@ -48,6 +48,7 @@ export type AppData = {
   plans: Plan[]
   messages: Message[]
   mood: string
+  moodBy?: string
 }
 
 const STORAGE_KEY = 'blizhe:app-data:v1'
@@ -185,6 +186,7 @@ export const seedData: AppData = {
     { id: 'message-4', text: 'Тогда это наше маленькое свидание', senderId: 'anya', createdAt: recentMessage(32) },
   ],
   mood: 'В любви',
+  moodBy: 'anya',
 }
 
 function freshSeed(): AppData {
@@ -238,6 +240,7 @@ export function loadData(): AppData {
       plans: safeArray(stored.plans, isPlan, fallback.plans),
       messages: safeArray(stored.messages, isMessage, fallback.messages),
       mood: isString(stored.mood) ? stored.mood : fallback.mood,
+      moodBy: isString(stored.moodBy) ? stored.moodBy : '',
     }
   } catch {
     return fallback

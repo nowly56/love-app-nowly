@@ -240,6 +240,21 @@ test('invitation joins two accounts into one shared space and is single-use', as
   assert.equal(unchanged.data.spaceId, third.data.spaceId);
 });
 
+test('heart signal shows who last shared a feeling without changing its author on other edits', async t => {
+  const { pair, save } = await fixture(t);
+  const { anna, sasha } = await pair();
+  const first = await save(anna, data => { data.mood = 'Скучаю'; data.moodBy = anna.data.user.id; });
+  assert.equal(first.status, 200);
+  assert.equal(first.data.data.moodBy, anna.data.user.id);
+  const reply = await save(sasha, data => { data.moodBy = sasha.data.user.id; });
+  assert.equal(reply.status, 200);
+  assert.equal(reply.data.data.mood, 'Скучаю');
+  assert.equal(reply.data.data.moodBy, sasha.data.user.id);
+  const unrelated = await save(anna, data => { data.plans.push({ id: 'plan-1', title: 'Прогулка', date: '', category: 'Свидание', done: false }); });
+  assert.equal(unrelated.status, 200);
+  assert.equal(unrelated.data.data.moodBy, sasha.data.user.id);
+});
+
 test('new invitation revokes the previous code; joining cannot discard existing personal records', async t => {
   const { request, register, save } = await fixture(t);
   const anna = await register();
