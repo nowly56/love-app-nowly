@@ -41,21 +41,17 @@ export default function SessionApp() {
     const generation = epoch.current;
     try {
       const initData = initial ? telegramInitData() : '';
+      if (initial && !initData) { if (generation === epoch.current) clear(); return; }
       if (initData) {
-        try {
-          const telegramSession = await api<SessionSnapshot>('/api/telegram/auth', { initData });
-          if (generation === epoch.current) accept(telegramSession);
-          return;
-        } catch (telegramError) {
-          if (!(telegramError instanceof ApiError) || ![401, 503].includes(telegramError.status)) throw telegramError;
-          // A first-time Telegram visitor signs in or registers below; expired initData may still have a valid cookie.
-        }
+        const telegramSession = await api<SessionSnapshot>('/api/telegram/auth', { initData });
+        if (generation === epoch.current) accept(telegramSession);
+        return;
       }
       const next = await api<SessionSnapshot>('/api/session');
       if (generation === epoch.current) accept(next);
     } catch (err) {
       if (generation !== epoch.current) return;
-      if (err instanceof ApiError && err.status === 401) clear();
+      if (err instanceof ApiError && err.status === 401 && !initial) clear();
       else {
         setConnected(false);
         if (initial) setError(err instanceof Error ? err.message : 'Не удалось открыть приложение');
@@ -89,17 +85,8 @@ export default function SessionApp() {
     } finally { saving.current = false; }
   }
 
-  async function logout() {
-    await api('/api/logout', {});
-    clear();
-  }
-
   if (loading) return <div className="session-screen" role="status"><Heart className="session-heart" size={40} fill="currentColor" /><h1>ближе.</h1><p>Открываем ваше пространство…</p></div>;
   if (error && !session) return <div className="session-screen"><WifiOff size={36} /><h1>Давайте снова попробуем</h1><p role="alert">{error}</p><button className="primary-button" onClick={() => { setLoading(true); void refresh(true); }}><RefreshCw size={17} />Повторить</button></div>;
-  if (!session) return <AuthScreen onAuthenticated={next => {
-    const initData = telegramInitData();
-    if (initData) void api<SessionSnapshot>('/api/telegram/auth', { initData }).then(linked => { epoch.current++; accept(linked); }).catch(() => { epoch.current++; accept(next); });
-    else { epoch.current++; accept(next); }
-  }} />;
-  return <App key={`${session.user.id}:${session.spaceId}`} session={session} onSession={accept} onSave={save} onLogout={logout} connected={connected} onReconnect={() => { void refresh(); }} />;
+  if (!session) return <AuthScreen onRetry={() => { setLoading(true); void refresh(true); }} />;
+  return <App key={`${session.user.id}:${session.spaceId}`} session={session} onSession={accept} onSave={save} connected={connected} onReconnect={() => { void refresh(); }} />;
 }

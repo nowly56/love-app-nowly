@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
-import { Camera, Check, Copy, Heart, KeyRound, Link2, LogOut, ShieldCheck, Sparkles, UserRound, Users } from 'lucide-react'
+import { Camera, Check, Copy, Heart, Link2, ShieldCheck, Sparkles, UserRound, Users } from 'lucide-react'
 import { api, ApiError } from './api'
 import type { SessionSnapshot } from './api'
 import { dayCount, formatDate, imageFileToDataUrl, pluralDays } from './data'
 import './account.css'
 
-type Props = { session: SessionSnapshot; onSession: (session: SessionSnapshot) => void; onLogout: () => Promise<void> }
+type Props = { session: SessionSnapshot; onSession: (session: SessionSnapshot) => void }
 type Feedback = { kind: 'success' | 'error'; text: string } | null
 const message = (error: unknown) => error instanceof Error ? error.message : 'Не удалось сохранить. Попробуйте ещё раз.'
 const today = () => new Date().toLocaleDateString('sv-SE')
@@ -18,7 +18,7 @@ function Avatar({ image, name }: { image: string; name: string }) {
   return image ? <img className="account-avatar" src={image} alt={`Аватар: ${name}`} /> : <span className="account-avatar account-avatar-placeholder" aria-label={`Аватар: ${name}`}>{name.trim().slice(0, 1).toUpperCase() || <UserRound size={30} />}</span>
 }
 
-export default function AccountSettings({ session, onSession, onLogout }: Props) {
+export default function AccountSettings({ session, onSession }: Props) {
   const own = session.data.profiles.find(profile => profile.id === session.user.id)!
   const partner = session.data.profiles.find(profile => profile.id !== session.user.id)
   const [name, setName] = useState(own.name)
@@ -29,16 +29,11 @@ export default function AccountSettings({ session, onSession, onLogout }: Props)
   const [profileFeedback, setProfileFeedback] = useState<Feedback>(null)
   const [relationshipFeedback, setRelationshipFeedback] = useState<Feedback>(null)
   const [inviteFeedback, setInviteFeedback] = useState<Feedback>(null)
-  const [passwordFeedback, setPasswordFeedback] = useState<Feedback>(null)
-  const [logoutFeedback, setLogoutFeedback] = useState<Feedback>(null)
   const [busy, setBusy] = useState('')
   const [processingImage, setProcessingImage] = useState(false)
   const [invite, setInvite] = useState('')
   const [joinCode, setJoinCode] = useState('')
   const [joinAccepted, setJoinAccepted] = useState(false)
-  const [currentPassword, setCurrentPassword] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [repeatPassword, setRepeatPassword] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
   const inviteInput = useRef<HTMLInputElement>(null)
   const alive = useRef(true)
@@ -117,27 +112,6 @@ export default function AccountSettings({ session, onSession, onLogout }: Props)
     finally { setBusy('') }
   }
 
-  async function changePassword(event: FormEvent) {
-    event.preventDefault()
-    if (busy) return
-    setPasswordFeedback(null)
-    if (newPassword !== repeatPassword) { setPasswordFeedback({ kind: 'error', text: 'Пароли не совпадают. Проверь повтор пароля.' }); return }
-    if (currentPassword === newPassword) { setPasswordFeedback({ kind: 'error', text: 'Придумай новый пароль, отличный от текущего.' }); return }
-    setBusy('password')
-    try {
-      await api<{ ok: boolean }>('/api/password', { currentPassword, password: newPassword })
-      setCurrentPassword(''); setNewPassword(''); setRepeatPassword('')
-      setPasswordFeedback({ kind: 'success', text: 'Пароль изменён. На других устройствах нужно войти заново.' })
-    } catch (error) { setPasswordFeedback({ kind: 'error', text: message(error) }) }
-    finally { setBusy('') }
-  }
-
-  async function logout() {
-    if (busy) return
-    setBusy('logout'); setLogoutFeedback(null)
-    try { await onLogout() } catch (error) { setLogoutFeedback({ kind: 'error', text: message(error) }); setBusy('') }
-  }
-
   return <div className="account-page">
     <header className="page-heading"><div><div className="eyebrow">С ЛЮБОВЬЮ К ДЕТАЛЯМ</div><h1>Ты. Я. Мы.<span className="heading-heart">♡</span></h1><p>Личное о тебе и важное о вас.</p></div><span className="private-badge"><ShieldCheck size={15} /> Ваше личное пространство</span></header>
 
@@ -172,7 +146,7 @@ export default function AccountSettings({ session, onSession, onLogout }: Props)
         <section className="account-card account-invitation panel" aria-labelledby="invitation-title">
           <div className="account-card-heading"><span className="account-section-icon lavender"><Link2 size={21} /></span><div><h2 id="invitation-title">{partner ? 'Вы уже вместе' : 'Одно пространство на двоих'}</h2><p>{partner ? 'Ваша история живёт на обоих устройствах.' : 'Поделись самым тёплым местом.'}</p></div></div>
           {partner ? <div className="account-partner-details"><span className="account-linked"><Check size={16} /> Пара соединена</span><p>Общие воспоминания, планы, даты и переписка доступны вам обоим после входа в свой аккаунт.</p>{partner.birthday && <p className="account-partner-birthday">🎂 День рождения: {formatDate(partner.birthday, { day: 'numeric', month: 'long' })}</p>}</div> : <>
-            <p className="account-help">Любимому человеку нужно создать свой аккаунт, открыть профиль и ввести твой код приглашения.</p>
+            <p className="account-help">Любимому человеку нужно открыть приложение через Telegram-бота и ввести твой код приглашения в профиле.</p>
             {invite && <div className="account-invite-code"><label htmlFor="invite-code">Твой код приглашения</label><div><input id="invite-code" ref={inviteInput} readOnly value={invite} onFocus={event => event.currentTarget.select()} /><button type="button" className="icon-button" title="Скопировать код приглашения" aria-label="Скопировать код приглашения" onClick={copyInvite}><Copy size={18} /></button></div><small>Действует 24 часа. Новый код заменит предыдущий.</small></div>}
             <button type="button" className="primary-button account-invite-button" onClick={createInvite} disabled={!!busy}><Link2 size={16} />{busy === 'invite' ? 'Создаём…' : invite ? 'Создать новый код' : 'Пригласить любимого человека'}</button>
             <details className="account-join-details"><summary>У тебя уже есть код приглашения?</summary><form className="account-form" onSubmit={joinSpace}><label className="account-field"><span>Код от любимого человека</span><input value={joinCode} onChange={event => setJoinCode(event.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" spellCheck={false} required maxLength={32} placeholder="Вставь код" disabled={!!busy} /></label><p className="account-help">Ты перейдёшь в пространство партнёра с его датой начала отношений. Твой профиль сохранится. Присоединиться можно только из пустого пространства. Если у вас уже есть история здесь, пригласи партнёра своим кодом.</p>{hasPersonalRecords ? <p className="account-feedback error">В этом пространстве уже есть история. Чтобы сохранить её, пригласи партнёра своим кодом.</p> : <label className="account-checkbox"><input type="checkbox" checked={joinAccepted} onChange={event => setJoinAccepted(event.target.checked)} required /><span>Хочу перейти в пространство любимого человека</span></label>}<button className="secondary-button" type="submit" disabled={!!busy || !joinAccepted || !joinCode.trim() || hasPersonalRecords}>{busy === 'join' ? 'Соединяем…' : 'Присоединиться к паре'}</button></form></details>
@@ -181,10 +155,9 @@ export default function AccountSettings({ session, onSession, onLogout }: Props)
         </section>
 
         <section className="account-card panel" aria-labelledby="security-settings-title">
-          <div className="account-card-heading"><span className="account-section-icon"><KeyRound size={21} /></span><div><h2 id="security-settings-title">Аккаунт и безопасность</h2><p>Чтобы личное оставалось личным.</p></div></div>
-          <div className="account-email"><span>Email для входа</span><strong>{session.user.email}</strong></div>
-          <details className="account-password-details"><summary>Изменить пароль</summary><form className="account-form" onSubmit={changePassword}><label className="account-field"><span>Текущий пароль</span><input type="password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} autoComplete="current-password" maxLength={128} required disabled={busy === 'password'} /></label><label className="account-field"><span>Новый пароль</span><input type="password" value={newPassword} onChange={event => setNewPassword(event.target.value)} autoComplete="new-password" minLength={10} maxLength={128} required disabled={busy === 'password'} /><small>От 10 до 128 символов.</small></label><label className="account-field"><span>Повтори новый пароль</span><input type="password" value={repeatPassword} onChange={event => setRepeatPassword(event.target.value)} autoComplete="new-password" minLength={10} maxLength={128} required disabled={busy === 'password'} /></label><FeedbackMessage value={passwordFeedback} /><button className="secondary-button" type="submit" disabled={!!busy}>{busy === 'password' ? 'Сохраняем…' : 'Обновить пароль'}</button></form></details>
-          <div className="account-logout"><p>Воспоминания останутся в аккаунте.<br />Ты сможешь вернуться в любой момент.</p><button type="button" className="account-logout-button" onClick={logout} disabled={!!busy}><LogOut size={17} />{busy === 'logout' ? 'Выходим…' : 'Выйти'}</button></div><FeedbackMessage value={logoutFeedback} />
+          <div className="account-card-heading"><span className="account-section-icon"><ShieldCheck size={21} /></span><div><h2 id="security-settings-title">Вход через Telegram</h2><p>Только ваш Telegram-аккаунт открывает эту историю.</p></div></div>
+          <div className="account-email"><span>Способ входа</span><strong>Telegram подключён</strong></div>
+          <p className="account-help">При следующем открытии через бота вы войдёте автоматически. Почта и пароль не нужны.</p>
         </section>
       </div>
     </div>

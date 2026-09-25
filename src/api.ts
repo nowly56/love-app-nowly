@@ -1,7 +1,7 @@
 import type { AppData } from './data';
 
 export type SessionSnapshot = {
-  user: { id: string; email: string; telegram?: boolean };
+  user: { id: string; email: string | null; telegram?: boolean };
   data: AppData;
   revision: number;
   spaceId: string;

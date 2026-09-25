@@ -59,7 +59,7 @@ export function createApi({ filename = process.env.DATABASE_PATH || resolve(proc
     const space = db.prepare('SELECT * FROM spaces WHERE id=?').get(user.space);
     const data = JSON.parse(space.data);
     data.profiles = db.prepare('SELECT profile FROM users WHERE space=? ORDER BY rowid').all(user.space).map(row => JSON.parse(row.profile));
-    return { user: { id: user.id, email: user.email, telegram: Boolean(user.telegram_id) }, data, revision: space.revision, spaceId: space.id };
+    return { user: { id: user.id, email: user.email.endsWith('@telegram.blizhe.invalid') ? null : user.email, telegram: Boolean(user.telegram_id) }, data, revision: space.revision, spaceId: space.id };
   }
   function telegramIdentity(initData) {
     const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN;
@@ -79,7 +79,7 @@ export function createApi({ filename = process.env.DATABASE_PATH || resolve(proc
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) fail(401, 'Не удалось проверить ваш Telegram-сеанс');
     let telegramUser;
     try { telegramUser = JSON.parse(values.get('user') || 'null'); } catch { fail(401, 'Профиль Telegram некорректен'); }
-    if (!telegramUser || !Number.isSafeInteger(telegramUser.id)) fail(401, 'Профиль Telegram не найден');
+    if (!telegramUser || !Number.isSafeInteger(telegramUser.id) || telegramUser.id <= 0) fail(401, 'Профиль Telegram не найден');
     return telegramUser;
   }
   function session(res, user) {
@@ -132,10 +132,25 @@ export function createApi({ filename = process.env.DATABASE_PATH || resolve(proc
           const token = req.headers.cookie?.split(';').map(x=>x.trim()).find(x=>x.startsWith('blizhe_session='))?.slice(15) || '';
           const stored = db.prepare('SELECT user FROM sessions WHERE token=? AND expires>?').get(hash(token),Date.now());
           const current = stored && userById(stored.user);
-          if (!current) fail(401, 'Войдите или создайте аккаунт, чтобы связать его с Telegram');
-          if (current.telegram_id && current.telegram_id !== String(telegramUser.id)) fail(409, 'Этот аккаунт уже связан с другим Telegram-профилем');
-          db.prepare('UPDATE users SET telegram_id=? WHERE id=?').run(String(telegramUser.id), current.id);
-          linked = userById(current.id);
+          if (current && !current.telegram_id) {
+            db.prepare('UPDATE users SET telegram_id=? WHERE id=?').run(String(telegramUser.id), current.id);
+            linked = userById(current.id);
+          } else {
+            const id = randomUUID(), space = randomUUID();
+            const name = [telegramUser.first_name, telegramUser.last_name].filter(part => typeof part === 'string').join(' ').trim().slice(0, 25) || 'Любимый человек';
+            const profile = { id, name, birthday: '', bio: '', avatar: '' };
+            const data = { startDate: new Date().toISOString().slice(0, 10), memories: [], dates: [], plans: [], messages: [], mood: '' };
+            // Keep the existing database layout for old accounts. These private values are never used for sign-in.
+            const internalEmail = `telegram-${telegramUser.id}@telegram.blizhe.invalid`;
+            db.exec('BEGIN');
+            try {
+              db.prepare('INSERT INTO spaces(id,data) VALUES(?,?)').run(space, JSON.stringify(data));
+              db.prepare('INSERT INTO users(id,email,password,profile,space,recovery,telegram_id) VALUES(?,?,?,?,?,?,?)')
+                .run(id, internalEmail, `${secret()}:${secret()}${secret()}`, JSON.stringify(profile), space, hash(secret()), String(telegramUser.id));
+              db.exec('COMMIT');
+            } catch (error) { db.exec('ROLLBACK'); throw error; }
+            linked = userById(id);
+          }
         }
         session(res, linked);
         return send(snapshot(linked));

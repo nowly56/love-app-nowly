@@ -67,7 +67,6 @@ type AppProps = {
   session: SessionSnapshot;
   onSession: (session: SessionSnapshot) => void;
   onSave: (change: (data: AppData) => AppData) => Promise<void>;
-  onLogout: () => Promise<void>;
   connected: boolean;
   onReconnect: () => void;
 };
@@ -75,7 +74,7 @@ function routePage(): Page {
   const page = window.location.hash.slice(1);
   return ['home', 'memories', 'dates', 'plans', 'chat', 'profiles'].includes(page) ? page as Page : 'home';
 }
-export default function App({ session, onSession, onSave, onLogout, connected, onReconnect }: AppProps) {
+export default function App({ session, onSession, onSave, connected, onReconnect }: AppProps) {
   const data = session.data;
   const me = data.profiles.find(person => person.id === session.user.id) || data.profiles[0];
   const [page, setPage] = useState<Page>(routePage);
@@ -233,7 +232,7 @@ export default function App({ session, onSession, onSave, onLogout, connected, o
 
         {page === 'chat' && <section className="chat-panel panel"><div className="chat-header"><div className="avatar-stack">{data.profiles.map(person => <Photo key={person.id} src={person.avatar} alt={person.name} />)}</div><div><h2>{together}</h2><p>Ваш уютный уголок</p></div><Heart size={20} className="chat-header-heart" /></div><div className="chat-local-note"><ShieldCheck size={14} />Ваш общий чат · обновляется автоматически</div><div className="messages"><span className="chat-day-label">Самые тёплые слова — простые</span>{!data.messages.length && <div className="chat-empty"><MessageCircle size={32} strokeWidth={1.3} /><p>{data.profiles.length < 2 ? 'Пригласите партнёра в профиле, чтобы переписываться здесь. Первое сообщение уже можно оставить.' : 'Напишите первое сообщение. Маленькое «люблю» — хорошее начало.'}</p></div>}{data.messages.map(message => { const person = data.profiles.find(profile => profile.id === message.senderId); const mine = message.senderId === senderId; return <div key={message.id} className={`message-row ${mine ? 'mine' : ''}`}>{!mine && <Photo src={person?.avatar || ''} alt={person?.name || ''} className="message-avatar" />}<div className="message-bubble">{!mine && <strong>{person?.name}</strong>}<p>{message.text}</p><span>{new Date(message.createdAt).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}{mine && <Check size={12} aria-label="Сохранено" />}</span></div></div>; })}<div ref={messagesEnd} /></div><div className="chat-compose-area"><div className="sender-label">Пишете вы: <strong>{me.name}</strong><span>{connected ? 'На связи' : 'Нет соединения'}</span></div>{emojisOpen && <div className="emoji-picker">{['❤️', '🥰', '😘', '🫂', '✨', '🌷', '💌', '🤍'].map(emoji => <button key={emoji} onClick={() => setChatText(text => text + emoji)} aria-label={`Добавить ${emoji}`}>{emoji}</button>)}</div>}<form className="chat-composer" onSubmit={sendMessage}><button type="button" className="icon-button" aria-label="Добавить эмодзи" onClick={() => setEmojisOpen(value => !value)}><Smile size={22} /></button><input value={chatText} onChange={e => setChatText(e.target.value)} maxLength={4000} placeholder="Напиши что-нибудь тёплое…" aria-label="Сообщение" /><button className="send-button" disabled={!chatText.trim() || saving} aria-label="Отправить сообщение"><Send size={19} /></button></form></div></section>}
 
-        {page === 'profiles' && <><AccountSettings session={session} onSession={onSession} onLogout={onLogout} /><section className="profile-export panel"><p>Сохраните вашу историю отдельным файлом.</p><button className="text-button" onClick={exportData}><ArrowDownToLine size={16} />Скачать резервную копию</button></section></>}
+        {page === 'profiles' && <><AccountSettings session={session} onSession={onSession} /><section className="profile-export panel"><p>Сохраните вашу историю отдельным файлом.</p><button className="text-button" onClick={exportData}><ArrowDownToLine size={16} />Скачать резервную копию</button></section></>}
       </main>
     </div>
 

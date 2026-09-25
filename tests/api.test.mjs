@@ -126,6 +126,39 @@ test('Telegram login verifies initData and links the signed-in account', async t
   assert.equal(forged.status, 401);
 });
 
+test('first Telegram visit creates an account without email or password and later visits restore it', async t => {
+  const token = 'test-telegram-bot-token';
+  const previousToken = process.env.TELEGRAM_BOT_TOKEN;
+  process.env.TELEGRAM_BOT_TOKEN = token;
+  t.after(() => { if (previousToken === undefined) delete process.env.TELEGRAM_BOT_TOKEN; else process.env.TELEGRAM_BOT_TOKEN = previousToken; });
+  const { request } = await fixture(t);
+  const signed = user => {
+    const values = new URLSearchParams({ auth_date: String(Math.floor(Date.now() / 1000)), user: JSON.stringify(user) });
+    const checkString = [...values.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => `${key}=${value}`).join('\n');
+    const secret = createHmac('sha256', 'WebAppData').update(token).digest();
+    values.set('hash', createHmac('sha256', secret).update(checkString).digest('hex'));
+    return values.toString();
+  };
+  const initData = signed({ id: 987654321, first_name: 'Анна', last_name: 'Тестовая' });
+  const first = await request('/api/telegram/auth', { body: { initData } });
+  assert.equal(first.status, 200, JSON.stringify(first.data));
+  assert.equal(first.data.user.email, null);
+  assert.equal(first.data.user.telegram, true);
+  assert.equal(first.data.data.profiles[0].name, 'Анна Тестовая');
+  assert.deepEqual(first.data.data.memories, []);
+  assert.ok(first.cookie);
+  const repeat = await request('/api/telegram/auth', { body: { initData } });
+  assert.equal(repeat.status, 200);
+  assert.equal(repeat.data.user.id, first.data.user.id);
+  assert.equal(repeat.data.spaceId, first.data.spaceId);
+  const second = await request('/api/telegram/auth', { body: { initData: signed({ id: 123456789, first_name: 'Саша' }), cookie: first.cookie } });
+  assert.equal(second.status, 200);
+  assert.notEqual(second.data.spaceId, first.data.spaceId);
+  const forged = new URLSearchParams(initData);
+  forged.set('user', JSON.stringify({ id: 555555555, first_name: 'Чужой' }));
+  assert.equal((await request('/api/telegram/auth', { body: { initData: forged.toString() } })).status, 401);
+});
+
 test('invalid credentials and duplicate registration cannot access or replace an account', async t => {
   const { request, register } = await fixture(t);
   const registered = await register();
