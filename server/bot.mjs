@@ -35,7 +35,7 @@ export function createTelegramBot({ token = process.env.TELEGRAM_BOT_TOKEN || pr
     if (!enabled || stopped) return;
     try {
       await call('setWebhook', { url: webhookUrl, secret_token: secret, allowed_updates: ['message'] });
-      await call('setChatMenuButton', { menu_button: { type: 'web_app', text: 'Открыть Ближе', web_app: { url: appUrl } } });
+      await call('setChatMenuButton', { menu_button: { type: 'web_app', text: 'Открыть Since Us', web_app: { url: appUrl } } });
       retryDelay = 2000;
       console.log(`Telegram-бот подключён: ${webhookUrl}`);
     } catch (error) {
@@ -76,8 +76,8 @@ export function createTelegramBot({ token = process.env.TELEGRAM_BOT_TOKEN || pr
       if (message?.chat?.type === 'private' && Number.isSafeInteger(message.chat.id) && typeof message.text === 'string') {
         await call('sendMessage', {
           chat_id: message.chat.id,
-          text: 'Привет! Это Ближе — ваше пространство для двоих. Нажми кнопку, чтобы открыть приложение 🤍',
-          reply_markup: { inline_keyboard: [[{ text: 'Открыть Ближе 🤍', web_app: { url: appUrl } }]] },
+          text: 'Привет! Это Since Us — ваше пространство для двоих. Нажми кнопку, чтобы открыть приложение 🤍',
+          reply_markup: { inline_keyboard: [[{ text: 'Открыть Since Us 🤍', web_app: { url: appUrl } }]] },
         });
       }
       if (Number.isSafeInteger(update?.update_id)) {

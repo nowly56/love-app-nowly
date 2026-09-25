@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ChangeEvent, FormEvent } from 'react'
-import { Camera, Check, Copy, Heart, Link2, ShieldCheck, Sparkles, UserRound, Users } from 'lucide-react'
+import type { FormEvent } from 'react'
+import { Check, Copy, Heart, Link2, ShieldCheck, Sparkles, UserRound, Users } from 'lucide-react'
 import { api, ApiError } from './api'
 import type { SessionSnapshot } from './api'
-import { dayCount, formatDate, imageFileToDataUrl, pluralDays } from './data'
+import { dayCount, formatDate, pluralDays } from './data'
 import './account.css'
 
 type Props = { session: SessionSnapshot; onSession: (session: SessionSnapshot) => void }
@@ -24,41 +24,26 @@ export default function AccountSettings({ session, onSession }: Props) {
   const [name, setName] = useState(own.name)
   const [birthday, setBirthday] = useState(own.birthday)
   const [bio, setBio] = useState(own.bio)
-  const [avatar, setAvatar] = useState(own.avatar)
   const [startDate, setStartDate] = useState(session.data.startDate)
   const [profileFeedback, setProfileFeedback] = useState<Feedback>(null)
   const [relationshipFeedback, setRelationshipFeedback] = useState<Feedback>(null)
   const [inviteFeedback, setInviteFeedback] = useState<Feedback>(null)
   const [busy, setBusy] = useState('')
-  const [processingImage, setProcessingImage] = useState(false)
   const [invite, setInvite] = useState('')
   const [joinCode, setJoinCode] = useState('')
   const [joinAccepted, setJoinAccepted] = useState(false)
-  const fileInput = useRef<HTMLInputElement>(null)
   const inviteInput = useRef<HTMLInputElement>(null)
-  const alive = useRef(true)
-  useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
-  useEffect(() => { setName(own.name); setBirthday(own.birthday); setBio(own.bio); setAvatar(own.avatar) }, [own.id, own.name, own.birthday, own.bio, own.avatar])
+  useEffect(() => { setName(own.name); setBirthday(own.birthday); setBio(own.bio) }, [own.id, own.name, own.birthday, own.bio])
   useEffect(() => { setStartDate(session.data.startDate) }, [session.data.startDate])
-  const profileChanged = name !== own.name || birthday !== own.birthday || bio !== own.bio || avatar !== own.avatar
+  const profileChanged = name !== own.name || birthday !== own.birthday || bio !== own.bio
   const hasPersonalRecords = session.data.memories.length > 0 || session.data.plans.length > 0 || session.data.messages.length > 0 || session.data.dates.some(item => item.id !== 'date-anniversary' && !item.id.startsWith('birthday:'))
-
-  async function uploadAvatar(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file || busy || processingImage) return
-    setProcessingImage(true); setProfileFeedback(null)
-    try { const image = await imageFileToDataUrl(file); if (alive.current) setAvatar(image) }
-    catch (error) { if (alive.current) setProfileFeedback({ kind: 'error', text: message(error) }) }
-    finally { if (alive.current) setProcessingImage(false) }
-  }
 
   async function saveProfile(event: FormEvent) {
     event.preventDefault()
-    if (busy || processingImage) return
+    if (busy) return
     setBusy('profile'); setProfileFeedback(null)
     try {
-      const result = await api<SessionSnapshot>('/api/profile', { name: name.trim(), birthday, bio: bio.trim(), avatar })
+      const result = await api<SessionSnapshot>('/api/profile', { name: name.trim(), birthday, bio: bio.trim() })
       onSession(result); setProfileFeedback({ kind: 'success', text: 'Профиль сохранён. Всё по-твоему.' })
     } catch (error) { setProfileFeedback({ kind: 'error', text: message(error) }) }
     finally { setBusy('') }
@@ -127,12 +112,12 @@ export default function AccountSettings({ session, onSession }: Props) {
         <section className="account-card panel" aria-labelledby="profile-settings-title">
           <div className="account-card-heading"><span className="account-section-icon"><UserRound size={21} /></span><div><h2 id="profile-settings-title">Твой профиль</h2><p>Маленькая история о тебе.</p></div></div>
           <form onSubmit={saveProfile} className="account-form">
-            <div className="account-avatar-editor"><Avatar image={avatar} name={name} /><div><button type="button" className="secondary-button" onClick={() => fileInput.current?.click()} disabled={!!busy || processingImage}><Camera size={16} />{processingImage ? 'Обрабатываем…' : avatar ? 'Изменить фото' : 'Добавить фото'}</button><p>JPG, PNG или WebP · до 15 МБ</p>{avatar && <button type="button" className="account-inline-button" disabled={!!busy || processingImage} onClick={() => { setAvatar(''); setProfileFeedback(null) }}>Убрать фотографию</button>}</div><input ref={fileInput} className="account-file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadAvatar} aria-label="Загрузить аватар" tabIndex={-1} /></div>
+            <div className="account-avatar-display"><Avatar image={own.avatar} name={own.name} /><div><p>Фото профиля берётся из Telegram и обновляется при входе.</p></div></div>
             <label className="account-field"><span>Как тебя называть</span><input value={name} maxLength={25} minLength={1} required autoComplete="given-name" onChange={event => { setName(event.target.value); setProfileFeedback(null) }} placeholder="Твоё имя" disabled={busy === 'profile'} /></label>
             <label className="account-field"><span>День рождения <small>по желанию</small></span><input type="date" value={birthday} max={today()} onChange={event => { setBirthday(event.target.value); setProfileFeedback(null) }} disabled={busy === 'profile'} /><small>Добавим в ваш календарь, чтобы этот день был особенным.</small></label>
             <label className="account-field"><span>Пара слов о тебе <small>{bio.length}/120</small></span><textarea value={bio} maxLength={120} rows={3} onChange={event => { setBio(event.target.value); setProfileFeedback(null) }} placeholder="Люблю долгие прогулки и наши разговоры…" disabled={busy === 'profile'} /></label>
             <FeedbackMessage value={profileFeedback} />
-            <div className="account-form-footer"><span>{profileChanged ? 'Есть несохранённые изменения' : 'Только ты можешь изменить свой профиль'}</span><button type="submit" className="primary-button" disabled={!!busy || processingImage || !profileChanged || !name.trim()}>{busy === 'profile' ? 'Сохраняем…' : 'Сохранить профиль'}</button></div>
+            <div className="account-form-footer"><span>{profileChanged ? 'Есть несохранённые изменения' : 'Только ты можешь изменить свой профиль'}</span><button type="submit" className="primary-button" disabled={!!busy || !profileChanged || !name.trim()}>{busy === 'profile' ? 'Сохраняем…' : 'Сохранить профиль'}</button></div>
           </form>
         </section>
 

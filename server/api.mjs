@@ -84,32 +84,37 @@ export function createApi({ filename = process.env.DATABASE_PATH || resolve(proc
   }
   async function telegramAvatar(userId) {
     const token = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN;
-    if (!token) return '';
+    if (!token) return null;
     const signal = AbortSignal.timeout(6000);
     try {
       const photosResponse = await telegramRequest(`https://api.telegram.org/bot${token}/getUserProfilePhotos?user_id=${userId}&limit=1`, { signal });
-      if (!photosResponse.ok) return '';
+      if (!photosResponse.ok) return null;
       const photos = (await photosResponse.json()).result?.photos?.[0];
       if (!Array.isArray(photos)) return '';
       const candidate = [...photos].reverse().find(item => item.file_id && (!item.file_size || item.file_size <= 1_000_000));
-      if (!candidate) return '';
+      if (!candidate) return photos.length ? null : '';
       const fileResponse = await telegramRequest(`https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(candidate.file_id)}`, { signal });
-      if (!fileResponse.ok) return '';
+      if (!fileResponse.ok) return null;
       const filePath = (await fileResponse.json()).result?.file_path;
-      if (typeof filePath !== 'string' || !/^[\w./-]+$/.test(filePath) || filePath.includes('..')) return '';
+      if (typeof filePath !== 'string' || !/^[\w./-]+$/.test(filePath) || filePath.includes('..')) return null;
       const imageResponse = await telegramRequest(`https://api.telegram.org/file/bot${token}/${filePath}`, { signal });
-      if (!imageResponse.ok || Number(imageResponse.headers.get('content-length') || 0) > 1_000_000) return '';
+      if (!imageResponse.ok || Number(imageResponse.headers.get('content-length') || 0) > 1_000_000) return null;
       const image = Buffer.from(await imageResponse.arrayBuffer());
-      if (image.length < 4 || image.length > 1_000_000 || image[0] !== 0xff || image[1] !== 0xd8) return '';
+      if (image.length < 4 || image.length > 1_000_000 || image[0] !== 0xff || image[1] !== 0xd8) return null;
       return `data:image/jpeg;base64,${image.toString('base64')}`;
-    } catch { return ''; }
+    } catch { return null; }
   }
   async function syncTelegramAvatar(user, telegramUser) {
     const profile = JSON.parse(user.profile);
-    if (profile.avatar || profile.avatarSource === 'none') return user;
+    if (!user.telegram_id) return user;
     const avatar = await telegramAvatar(telegramUser.id);
-    if (!avatar) return user;
-    db.prepare('UPDATE users SET profile=? WHERE id=?').run(JSON.stringify({ ...profile, avatar, avatarSource: 'telegram' }), user.id);
+    if (avatar === null) {
+      if (!profile.avatar || profile.avatarSource === 'telegram') return user;
+      db.prepare('UPDATE users SET profile=? WHERE id=?').run(JSON.stringify({ ...profile, avatar: '', avatarSource: 'none' }), user.id);
+      return userById(user.id);
+    }
+    if (profile.avatar === avatar && profile.avatarSource === (avatar ? 'telegram' : 'none')) return user;
+    db.prepare('UPDATE users SET profile=? WHERE id=?').run(JSON.stringify({ ...profile, avatar, avatarSource: avatar ? 'telegram' : 'none' }), user.id);
     return userById(user.id);
   }
   function session(res, user) {
@@ -235,9 +240,7 @@ export function createApi({ filename = process.env.DATABASE_PATH || resolve(proc
       }
       if (path === '/api/profile' && req.method === 'POST') {
         const previous = JSON.parse(user.profile);
-        const avatar = photo(body.avatar);
-        const profile = {id:user.id,name:text(body.name,25,true),birthday:date(body.birthday,true),bio:text(body.bio),avatar,
-          avatarSource: avatar === previous.avatar ? previous.avatarSource : avatar ? 'custom' : 'none'};
+        const profile = {id:user.id,name:text(body.name,25,true),birthday:date(body.birthday,true),bio:text(body.bio),avatar:user.telegram_id ? previous.avatar : ''};
         if (profile.birthday > new Date().toISOString().slice(0,10)) fail(400,'День рождения не может быть в будущем');
         db.prepare('UPDATE users SET profile=? WHERE id=?').run(JSON.stringify(profile),user.id);
         profileDates(user.space); return send(snapshot(userById(user.id)));

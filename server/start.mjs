@@ -62,5 +62,5 @@ const server = createServer(async (req, res) => {
   else createReadStream(filename).pipe(res);
 });
 
-server.listen(port, '0.0.0.0', () => { console.log(`Ближе запущен на порту ${port}`); void bot.start(); });
+server.listen(port, '0.0.0.0', () => { console.log(`Since Us запущен на порту ${port}`); void bot.start(); });
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { bot.stop(); server.close(() => { api.close(); process.exit(0); }); });

@@ -73,7 +73,7 @@ self.addEventListener('fetch', event => {
         return response;
       } catch {
         const cache = await caches.open(PAGE_CACHE);
-        return (await cache.match(request)) || (await cache.match('/')) || new Response('Подключитесь к интернету, чтобы впервые открыть «ближе».', {
+        return (await cache.match(request)) || (await cache.match('/')) || new Response('Подключитесь к интернету, чтобы впервые открыть Since Us.', {
           status: 503,
           headers: { 'Content-Type': 'text/plain; charset=utf-8' },
         });

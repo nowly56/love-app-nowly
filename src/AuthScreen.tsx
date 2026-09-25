@@ -3,10 +3,10 @@ import './auth.css'
 
 export default function AuthScreen({ onRetry }: { onRetry: () => void }) {
   return <main className="auth-page">
-    <section className="auth-story" aria-label="Ближе — пространство для двоих">
+    <section className="auth-story" aria-label="Since Us — пространство для двоих">
       <img className="auth-landscape" src="/photos/sunset.jpg" alt="Тёплый закат над морем" />
       <div className="auth-story-shade" />
-      <div className="auth-story-top"><a className="auth-brand" href="/" aria-label="Ближе, главная"><Heart fill="currentColor" strokeWidth={0} />ближе<span>.</span></a><span className="auth-story-badge"><Heart size={13} /> создано для двоих</span></div>
+      <div className="auth-story-top"><a className="auth-brand" href="/" aria-label="Since Us, главная"><Heart fill="currentColor" strokeWidth={0} />Since Us</a><span className="auth-story-badge"><Heart size={13} /> создано для двоих</span></div>
       <div className="auth-story-content">
         <span className="auth-story-kicker">МАЛЕНЬКИЕ МОМЕНТЫ. БОЛЬШОЕ ЧУВСТВО.</span>
         <h1>В целом мире.<br /><em>Только мы.</em></h1>
@@ -19,7 +19,7 @@ export default function AuthScreen({ onRetry }: { onRetry: () => void }) {
       <div className="auth-form-wrap telegram-entry">
         <span className="auth-heading-icon"><ShieldCheck size={28} /></span>
         <span className="auth-eyebrow">ВАША ИСТОРИЯ НАЧИНАЕТСЯ ЗДЕСЬ</span>
-        <h2>Откройте «Ближе» в Telegram</h2>
+        <h2>Откройте Since Us в Telegram</h2>
         <p className="auth-description">Вернитесь в чат с ботом и нажмите кнопку открытия приложения. Telegram подтвердит вашу личность, и вы сразу попадёте в своё пространство.</p>
         <button type="button" className="auth-submit" onClick={onRetry}>Попробовать снова <RefreshCw size={18} /></button>
         <p className="telegram-auth-note"><ArrowRight size={17} /> Почта, пароль и отдельная регистрация не нужны.</p>

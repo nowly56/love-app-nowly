@@ -85,7 +85,7 @@ export default function SessionApp() {
     } finally { saving.current = false; }
   }
 
-  if (loading) return <div className="session-screen" role="status"><Heart className="session-heart" size={40} fill="currentColor" /><h1>ближе.</h1><p>Открываем ваше пространство…</p></div>;
+  if (loading) return <div className="session-screen" role="status"><Heart className="session-heart" size={40} fill="currentColor" /><h1>Since Us</h1><p>Открываем ваше пространство…</p></div>;
   if (error && !session) return <div className="session-screen"><WifiOff size={36} /><h1>Давайте снова попробуем</h1><p role="alert">{error}</p><button className="primary-button" onClick={() => { setLoading(true); void refresh(true); }}><RefreshCw size={17} />Повторить</button></div>;
   if (!session) return <AuthScreen onRetry={() => { setLoading(true); void refresh(true); }} />;
   return <App key={`${session.user.id}:${session.spaceId}`} session={session} onSession={accept} onSave={save} connected={connected} onReconnect={() => { void refresh(); }} />;

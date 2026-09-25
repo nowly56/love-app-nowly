@@ -159,7 +159,7 @@ test('first Telegram visit creates an account without email or password and late
   assert.equal((await request('/api/telegram/auth', { body: { initData: forged.toString() } })).status, 401);
 });
 
-test('Telegram profile photo fills an empty avatar without replacing a custom photo', async t => {
+test('Telegram profile photo stays authoritative and cannot be changed in profile settings', async t => {
   const token = 'test-telegram-bot-token';
   const previousToken = process.env.TELEGRAM_BOT_TOKEN;
   process.env.TELEGRAM_BOT_TOKEN = token;
@@ -181,9 +181,10 @@ test('Telegram profile photo fills an empty avatar without replacing a custom ph
   assert.equal(first.data.data.profiles[0].avatar, `data:image/jpeg;base64,${image.toString('base64')}`);
   const profile = await request('/api/profile', { cookie: first.cookie, body: { name: 'Анна', birthday: '', bio: '', avatar } });
   assert.equal(profile.status, 200);
+  assert.equal(profile.data.data.profiles[0].avatar, `data:image/jpeg;base64,${image.toString('base64')}`);
   const again = await request('/api/telegram/auth', { body: { initData } });
-  assert.equal(again.data.data.profiles[0].avatar, avatar);
-  assert.equal(photoCalls, 1);
+  assert.equal(again.data.data.profiles[0].avatar, `data:image/jpeg;base64,${image.toString('base64')}`);
+  assert.equal(photoCalls, 2);
 });
 
 test('invalid credentials and duplicate registration cannot access or replace an account', async t => {
@@ -256,7 +257,7 @@ test('new invitation revokes the previous code; joining cannot discard existing 
   assert.equal(unchanged.data.data.plans[0].id, 'keep');
 });
 
-test('profile updates preserve the authenticated owner, store avatar, and synchronize birthday', async t => {
+test('profile updates preserve the authenticated owner, ignore manual avatars, and synchronize birthday', async t => {
   const { request, pair } = await fixture(t);
   const { anna, sasha } = await pair();
   const updated = await request('/api/profile', {
@@ -266,13 +267,13 @@ test('profile updates preserve the authenticated owner, store avatar, and synchr
   assert.equal(updated.status, 200);
   const own = updated.data.data.profiles.find(p => p.id === anna.data.user.id);
   assert.equal(own.name, 'Анна Мария');
-  assert.equal(own.avatar, avatar);
+  assert.equal(own.avatar, '');
   assert.equal(updated.data.data.profiles.find(p => p.id === sasha.data.user.id).name, 'Саша');
   const birthday = updated.data.data.dates.find(d => d.id === `birthday:${anna.data.user.id}`);
   assert.equal(birthday.date, '2000-02-29');
   assert.equal(birthday.annual, true);
   const partnerView = await request('/api/session', { cookie: sasha.cookie });
-  assert.equal(partnerView.data.data.profiles.find(p => p.id === anna.data.user.id).avatar, avatar);
+  assert.equal(partnerView.data.data.profiles.find(p => p.id === anna.data.user.id).avatar, '');
   const removed = await request('/api/profile', { cookie: anna.cookie, body: { ...own, birthday: '', avatar: '' } });
   assert.equal(removed.status, 200);
   assert.equal(removed.data.data.dates.some(d => d.id === `birthday:${anna.data.user.id}`), false);
@@ -404,8 +405,6 @@ test('invalid registration and profile data are rejected without altering saved 
     { name: 'x'.repeat(26) },
     { birthday: '2001-02-29' },
     { birthday: '9999-01-01' },
-    { avatar: 'https://example.test/avatar.jpg' },
-    { avatar: 'data:image/svg+xml;base64,PHN2Zz4=' },
     { bio: 'x'.repeat(121) },
   ]) assert.equal((await request('/api/profile', { cookie: registered.cookie, body: { ...valid, ...changes } })).status, 400);
   const after = await request('/api/session', { cookie: registered.cookie });
