@@ -8,7 +8,7 @@ const password = 'a-long-test-password';
 const avatar = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
 
 async function fixture(t, options = {}) {
-  const api = createApi({ filename: ':memory:', ...options });
+  const api = createApi({ filename: ':memory:', telegramRequest: async () => ({ ok: false }), ...options });
   const server = createServer((req, res) => api.middleware(req, res, () => {
     res.writeHead(404).end();
   }));
@@ -157,6 +157,33 @@ test('first Telegram visit creates an account without email or password and late
   const forged = new URLSearchParams(initData);
   forged.set('user', JSON.stringify({ id: 555555555, first_name: 'Чужой' }));
   assert.equal((await request('/api/telegram/auth', { body: { initData: forged.toString() } })).status, 401);
+});
+
+test('Telegram profile photo fills an empty avatar without replacing a custom photo', async t => {
+  const token = 'test-telegram-bot-token';
+  const previousToken = process.env.TELEGRAM_BOT_TOKEN;
+  process.env.TELEGRAM_BOT_TOKEN = token;
+  t.after(() => { if (previousToken === undefined) delete process.env.TELEGRAM_BOT_TOKEN; else process.env.TELEGRAM_BOT_TOKEN = previousToken; });
+  const image = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+  let photoCalls = 0;
+  const telegramRequest = async url => {
+    if (url.includes('/getUserProfilePhotos')) { photoCalls++; return { ok: true, json: async () => ({ result: { photos: [[{ file_id: 'photo-id', file_size: image.length }]] } }) }; }
+    if (url.includes('/getFile')) return { ok: true, json: async () => ({ result: { file_path: 'photos/avatar.jpg' } }) };
+    return { ok: true, headers: new Headers({ 'content-length': String(image.length) }), arrayBuffer: async () => image };
+  };
+  const { request } = await fixture(t, { telegramRequest });
+  const values = new URLSearchParams({ auth_date: String(Math.floor(Date.now() / 1000)), user: JSON.stringify({ id: 987654321, first_name: 'Анна' }) });
+  const checkString = [...values.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => `${key}=${value}`).join('\n');
+  values.set('hash', createHmac('sha256', createHmac('sha256', 'WebAppData').update(token).digest()).update(checkString).digest('hex'));
+  const initData = values.toString();
+  const first = await request('/api/telegram/auth', { body: { initData } });
+  assert.equal(first.status, 200, JSON.stringify(first.data));
+  assert.equal(first.data.data.profiles[0].avatar, `data:image/jpeg;base64,${image.toString('base64')}`);
+  const profile = await request('/api/profile', { cookie: first.cookie, body: { name: 'Анна', birthday: '', bio: '', avatar } });
+  assert.equal(profile.status, 200);
+  const again = await request('/api/telegram/auth', { body: { initData } });
+  assert.equal(again.data.data.profiles[0].avatar, avatar);
+  assert.equal(photoCalls, 1);
 });
 
 test('invalid credentials and duplicate registration cannot access or replace an account', async t => {

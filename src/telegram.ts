@@ -32,8 +32,7 @@ function applyTelegramTheme() {
       const value = webApp.themeParams?.[key];
       if (value && /^#[0-9a-f]{6}$/i.test(value)) root.style.setProperty(variable, value);
     }
-    const color = webApp.themeParams?.bg_color;
-    try { if (color && /^#[0-9a-f]{6}$/i.test(color)) webApp.setHeaderColor?.(color); } catch { /* Header tint is not available in older clients. */ }
+    try { webApp.setHeaderColor?.('#f8f4f0'); webApp.setBackgroundColor?.('#f8f4f0'); } catch { /* Color controls are not available in older clients. */ }
   };
   setTheme();
   webApp.onEvent?.('themeChanged', setTheme);

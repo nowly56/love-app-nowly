@@ -4,6 +4,7 @@ export type Profile = {
   birthday: string
   avatar: string
   bio: string
+  avatarSource?: 'telegram' | 'custom' | 'none'
 }
 
 export type Memory = {

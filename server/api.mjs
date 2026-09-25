@@ -33,7 +33,7 @@ async function matches(password, stored) {
   return timingSafeEqual(await derive(password, salt, 64), Buffer.from(digest, 'hex'));
 }
 
-export function createApi({ filename = process.env.DATABASE_PATH || resolve(process.env.RAILWAY_VOLUME_MOUNT_PATH || 'storage', 'blizhe.sqlite'), secure = process.env.COOKIE_SECURE === 'true' } = {}) {
+export function createApi({ filename = process.env.DATABASE_PATH || resolve(process.env.RAILWAY_VOLUME_MOUNT_PATH || 'storage', 'blizhe.sqlite'), secure = process.env.COOKIE_SECURE === 'true', telegramRequest = fetch } = {}) {
   if (filename !== ':memory:') mkdirSync(resolve(filename, '..'), { recursive: true });
   const db = new DatabaseSync(filename);
   db.exec(`PRAGMA journal_mode=WAL;
@@ -81,6 +81,36 @@ export function createApi({ filename = process.env.DATABASE_PATH || resolve(proc
     try { telegramUser = JSON.parse(values.get('user') || 'null'); } catch { fail(401, 'Профиль Telegram некорректен'); }
     if (!telegramUser || !Number.isSafeInteger(telegramUser.id) || telegramUser.id <= 0) fail(401, 'Профиль Telegram не найден');
     return telegramUser;
+  }
+  async function telegramAvatar(userId) {
+    const token = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN;
+    if (!token) return '';
+    const signal = AbortSignal.timeout(6000);
+    try {
+      const photosResponse = await telegramRequest(`https://api.telegram.org/bot${token}/getUserProfilePhotos?user_id=${userId}&limit=1`, { signal });
+      if (!photosResponse.ok) return '';
+      const photos = (await photosResponse.json()).result?.photos?.[0];
+      if (!Array.isArray(photos)) return '';
+      const candidate = [...photos].reverse().find(item => item.file_id && (!item.file_size || item.file_size <= 1_000_000));
+      if (!candidate) return '';
+      const fileResponse = await telegramRequest(`https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(candidate.file_id)}`, { signal });
+      if (!fileResponse.ok) return '';
+      const filePath = (await fileResponse.json()).result?.file_path;
+      if (typeof filePath !== 'string' || !/^[\w./-]+$/.test(filePath) || filePath.includes('..')) return '';
+      const imageResponse = await telegramRequest(`https://api.telegram.org/file/bot${token}/${filePath}`, { signal });
+      if (!imageResponse.ok || Number(imageResponse.headers.get('content-length') || 0) > 1_000_000) return '';
+      const image = Buffer.from(await imageResponse.arrayBuffer());
+      if (image.length < 4 || image.length > 1_000_000 || image[0] !== 0xff || image[1] !== 0xd8) return '';
+      return `data:image/jpeg;base64,${image.toString('base64')}`;
+    } catch { return ''; }
+  }
+  async function syncTelegramAvatar(user, telegramUser) {
+    const profile = JSON.parse(user.profile);
+    if (profile.avatar || profile.avatarSource === 'none') return user;
+    const avatar = await telegramAvatar(telegramUser.id);
+    if (!avatar) return user;
+    db.prepare('UPDATE users SET profile=? WHERE id=?').run(JSON.stringify({ ...profile, avatar, avatarSource: 'telegram' }), user.id);
+    return userById(user.id);
   }
   function session(res, user) {
     const token = secret();
@@ -152,6 +182,7 @@ export function createApi({ filename = process.env.DATABASE_PATH || resolve(proc
             linked = userById(id);
           }
         }
+        linked = await syncTelegramAvatar(linked, telegramUser);
         session(res, linked);
         return send(snapshot(linked));
       }
@@ -203,7 +234,10 @@ export function createApi({ filename = process.env.DATABASE_PATH || resolve(proc
         db.prepare('DELETE FROM sessions WHERE user=?').run(user.id); session(res,user); return send({ok:true});
       }
       if (path === '/api/profile' && req.method === 'POST') {
-        const profile = {id:user.id,name:text(body.name,25,true),birthday:date(body.birthday,true),bio:text(body.bio),avatar:photo(body.avatar)};
+        const previous = JSON.parse(user.profile);
+        const avatar = photo(body.avatar);
+        const profile = {id:user.id,name:text(body.name,25,true),birthday:date(body.birthday,true),bio:text(body.bio),avatar,
+          avatarSource: avatar === previous.avatar ? previous.avatarSource : avatar ? 'custom' : 'none'};
         if (profile.birthday > new Date().toISOString().slice(0,10)) fail(400,'День рождения не может быть в будущем');
         db.prepare('UPDATE users SET profile=? WHERE id=?').run(JSON.stringify(profile),user.id);
         profileDates(user.space); return send(snapshot(userById(user.id)));
