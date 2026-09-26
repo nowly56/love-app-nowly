@@ -132,6 +132,7 @@ export default function App({ session, onSession, onSave, connected, onReconnect
       const bPast = daysUntil(b.next) < 0;
       return Number(aPast) - Number(bPast) || a.next.getTime() - b.next.getTime();
     }), [data.dates, currentDay]);
+  const upcomingDates = dates.filter(item => daysUntil(item.next) >= 0).slice(0, 3);
   const plans = useMemo(() => [...data.plans].sort((a, b) => Number(a.done) - Number(b.done) || (a.date || '9999').localeCompare(b.date || '9999')), [data.plans]);
 
   useEffect(() => {
@@ -270,6 +271,16 @@ export default function App({ session, onSession, onSave, connected, onReconnect
             <div className="heart-heading"><div><span className="section-kicker">ТИХИЙ СИГНАЛ</span><h2 id="heart-title">Как твоё сердечко?</h2></div><Heart size={20} strokeWidth={1.5} /></div>
             <p>{partner ? (visibleMood && visibleMoodBy === partner.id ? `${partner.name}: ${moodLabel}` : visibleMood && visibleMoodBy === me.id ? `Твой сигнал: ${moodLabel}. ${partner.name} его увидит.` : visibleMood ? `Сейчас в вашей истории: ${moodLabel}` : `Выбери чувство — ${partner.name} его увидит.`) : 'Выбери чувство для вашей истории.'}</p>
             <div className="feeling-options">{feelings.map(feeling => <button key={feeling.label} className={moodLabel === feeling.label && visibleMoodBy === me.id ? 'selected' : ''} aria-pressed={moodLabel === feeling.label && visibleMoodBy === me.id} onClick={async () => { setHeartPreview(feeling.label); const saved = await update(previous => ({ ...previous, mood: feeling.label, moodBy: me.id })); setHeartPreview(null); if (saved) notify('Сердечко обновлено'); }} disabled={saving}><span>{feeling.emoji}</span><small>{feeling.label}</small></button>)}</div>
+          </section>
+          <section className="upcoming-card" aria-labelledby="upcoming-title">
+            <div className="upcoming-heading"><h2 id="upcoming-title">Ближайшие даты</h2><button onClick={() => go('dates')}>Все даты <ArrowRight size={15} /></button></div>
+            {upcomingDates.length ? <div className="upcoming-list">{upcomingDates.map(item => {
+              const remaining = daysUntil(item.next);
+              return <div className="upcoming-row" key={item.id}>
+                <div className="upcoming-details"><strong>{item.title}</strong><span>{item.next.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</span></div>
+                <div className="upcoming-count"><strong>{remaining === 0 ? 'Сегодня' : remaining}</strong>{remaining > 0 && <span>{pluralDays(remaining)}</span>}</div>
+              </div>;
+            })}</div> : <p className="upcoming-empty">Добавьте важную дату, чтобы видеть отсчёт до неё.</p>}
           </section>
         </>}
 
