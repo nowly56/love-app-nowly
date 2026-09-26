@@ -111,6 +111,7 @@ export default function App({ session, onSession, onSave, connected, onReconnect
   const [upload, setUpload] = useState('');
   const [toast, setToast] = useState('');
   const [currentDay, setCurrentDay] = useState(todayString);
+  const frameRef = useRef<HTMLDivElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const days = dayCount(data.startDate);
   const milestone = nextMilestone(days);
@@ -125,7 +126,7 @@ export default function App({ session, onSession, onSave, connected, onReconnect
   const plans = useMemo(() => [...data.plans].sort((a, b) => Number(a.done) - Number(b.done) || (a.date || '9999').localeCompare(b.date || '9999')), [data.plans]);
 
   useEffect(() => {
-    const onHash = () => { setPage(routePage()); setModal(null); window.scrollTo(0, 0); };
+    const onHash = () => { setPage(routePage()); setModal(null); frameRef.current?.scrollTo(0, 0); };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -145,7 +146,7 @@ export default function App({ session, onSession, onSave, connected, onReconnect
     window.location.hash = next;
     setPage(next);
     setModal(null);
-    window.scrollTo(0, 0);
+    frameRef.current?.scrollTo(0, 0);
   }
   function open(next: ModalState) {
     if (saving) return;
@@ -229,12 +230,9 @@ export default function App({ session, onSession, onSave, connected, onReconnect
   }
 
   return <div className="app-shell">
-    <div className="app-frame">
+    <div className="app-frame" ref={frameRef}>
       <header className="app-header">
-        <button className="wordmark" onClick={() => go('home')} aria-label="Since Us — на главную"><span>SINCE US</span><strong>Наше место</strong></button>
-        <button className="header-person" onClick={() => go('profiles')} aria-label="Открыть настройки">
-          <Photo src={me.avatar} alt={me.name} />
-        </button>
+        <button className="wordmark" onClick={() => go('home')} aria-label="Since Us — на главную"><Heart size={18} strokeWidth={1.6} /><span>Since Us</span></button>
       </header>
 
       {!connected && <div className="connection-notice" role="status">Нет связи. Показаны последние данные. <button onClick={onReconnect}>Повторить</button></div>}
@@ -289,7 +287,7 @@ export default function App({ session, onSession, onSave, connected, onReconnect
       </main>
     </div>
 
-    <nav className="bottom-nav" aria-label="Основная навигация">{navigation.map(({ id, label, icon: Icon }) => <button key={id} className={page === id ? 'active' : ''} onClick={() => go(id)} aria-current={page === id ? 'page' : undefined}><Icon size={21} strokeWidth={1.7} fill={page === id && id === 'home' ? 'currentColor' : 'none'} /><span>{label}</span></button>)}</nav>
+    <nav className="bottom-nav" aria-label="Основная навигация"><span className="nav-indicator" aria-hidden="true" style={{ transform: `translateX(${navigation.findIndex(item => item.id === page) * 100}%)` }} />{navigation.map(({ id, label, icon: Icon }) => <button key={id} className={page === id ? 'active' : ''} onClick={() => go(id)} aria-current={page === id ? 'page' : undefined}><Icon size={21} strokeWidth={1.7} fill={page === id && id === 'home' ? 'currentColor' : 'none'} /><span>{label}</span></button>)}</nav>
     {toast && <div className="toast" role="status">{toast}</div>}
 
     {modal && <Modal key={modal.type} title={modal.type === 'memory' ? modal.memory ? 'Изменить момент' : 'Новый момент' : modal.type === 'date' ? modal.date ? 'Изменить дату' : 'Новая дата' : modal.type === 'plan' ? modal.plan ? 'Изменить план' : 'Новый план' : modal.type === 'detail' ? modal.memory.title : 'Удалить запись?'} close={() => { if (!saving) setModal(null); }}>
