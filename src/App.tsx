@@ -61,6 +61,10 @@ const nextMilestone = (days: number) => {
   return { target, remaining: target - days, progress: Math.round(((days - previous) / (target - previous)) * 100) };
 };
 const dateText = (date: string) => formatDate(date, { day: 'numeric', month: 'long', year: 'numeric' }).replace(' г.', '');
+const milestoneDate = (startDate: string, days: number) => {
+  const [year, month, day] = startDate.split('-').map(Number);
+  return new Date(year, month - 1, day + days).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).replace(' г.', '');
+};
 
 function Photo({ src, alt, className = '' }: { src: string; alt: string; className?: string }) {
   const [failed, setFailed] = useState(false);
@@ -110,12 +114,17 @@ export default function App({ session, onSession, onSave, connected, onReconnect
   const [saving, setSaving] = useState(false);
   const [upload, setUpload] = useState('');
   const [toast, setToast] = useState('');
+  const [heartPreview, setHeartPreview] = useState<string | null>(null);
   const [currentDay, setCurrentDay] = useState(todayString);
   const frameRef = useRef<HTMLDivElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const days = dayCount(data.startDate);
   const milestone = nextMilestone(days);
-  const moodLabel = previousFeelingLabels[data.mood] || data.mood;
+  const milestonePath = [milestone.target, ...milestoneSteps.filter(step => step > milestone.target).slice(0, 2)];
+  while (milestonePath.length < 3) milestonePath.push(milestonePath[milestonePath.length - 1] + 365);
+  const visibleMood = heartPreview ?? data.mood;
+  const visibleMoodBy = heartPreview === null ? data.moodBy : me.id;
+  const moodLabel = previousFeelingLabels[visibleMood] || visibleMood;
   const dates = useMemo(() => data.dates
     .map(item => ({ ...item, next: nextOccurrence(item.date, item.annual) }))
     .sort((a, b) => {
@@ -252,13 +261,15 @@ export default function App({ session, onSession, onSave, connected, onReconnect
           <section className="milestone-card" aria-labelledby="milestone-title">
             <div className="milestone-head"><span id="milestone-title">СЛЕДУЮЩИЙ ЮБИЛЕЙ</span><Heart size={18} strokeWidth={1.5} /></div>
             <strong>{milestone.target} {pluralDays(milestone.target)}</strong>
+            <p className="milestone-date">{milestoneDate(data.startDate, milestone.target)}</p>
             <div className="progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={milestone.progress} aria-label="Путь до следующего юбилея"><span style={{ width: `${milestone.progress}%` }} /></div>
-            <div className="milestone-foot"><span>{milestone.remaining} {pluralDays(milestone.remaining)} осталось</span><b>{milestone.progress}%</b></div>
+            <div className="milestone-foot"><span>{milestone.remaining} {pluralDays(milestone.remaining)} осталось</span><b>{days} / {milestone.target}</b></div>
+            <div className="milestone-steps" aria-label="Ближайшие юбилеи">{milestonePath.map((step, index) => <span className={index === 0 ? 'current' : ''} key={step}>{step} {pluralDays(step)}</span>)}</div>
           </section>
           <section className="heart-card" aria-labelledby="heart-title">
             <div className="heart-heading"><div><span className="section-kicker">ТИХИЙ СИГНАЛ</span><h2 id="heart-title">Как твоё сердечко?</h2></div><Heart size={20} strokeWidth={1.5} /></div>
-            <p>{partner ? (data.mood && data.moodBy === partner.id ? `${partner.name}: ${moodLabel}` : data.mood && data.moodBy === me.id ? `Твой сигнал: ${moodLabel}. ${partner.name} его увидит.` : data.mood ? `Сейчас в вашей истории: ${moodLabel}` : `Выбери чувство — ${partner.name} его увидит.`) : 'Выбери чувство для вашей истории.'}</p>
-            <div className="feeling-options">{feelings.map(feeling => <button key={feeling.label} className={moodLabel === feeling.label && data.moodBy === me.id ? 'selected' : ''} aria-pressed={moodLabel === feeling.label && data.moodBy === me.id} onClick={async () => { if (await update(previous => ({ ...previous, mood: feeling.label, moodBy: me.id }))) notify('Сердечко обновлено'); }} disabled={saving}><span>{feeling.emoji}</span><small>{feeling.label}</small></button>)}</div>
+            <p>{partner ? (visibleMood && visibleMoodBy === partner.id ? `${partner.name}: ${moodLabel}` : visibleMood && visibleMoodBy === me.id ? `Твой сигнал: ${moodLabel}. ${partner.name} его увидит.` : visibleMood ? `Сейчас в вашей истории: ${moodLabel}` : `Выбери чувство — ${partner.name} его увидит.`) : 'Выбери чувство для вашей истории.'}</p>
+            <div className="feeling-options">{feelings.map(feeling => <button key={feeling.label} className={moodLabel === feeling.label && visibleMoodBy === me.id ? 'selected' : ''} aria-pressed={moodLabel === feeling.label && visibleMoodBy === me.id} onClick={async () => { setHeartPreview(feeling.label); const saved = await update(previous => ({ ...previous, mood: feeling.label, moodBy: me.id })); setHeartPreview(null); if (saved) notify('Сердечко обновлено'); }} disabled={saving}><span>{feeling.emoji}</span><small>{feeling.label}</small></button>)}</div>
           </section>
         </>}
 
