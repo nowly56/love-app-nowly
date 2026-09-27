@@ -311,11 +311,6 @@ export default function App({ session, onSession, onSave, connected, onReconnect
             <div className="milestone-foot"><span>{milestone.remaining} {pluralDays(milestone.remaining)} осталось</span><b>{days} / {milestone.target}</b></div>
             <div className="milestone-steps" aria-label="Ближайшие юбилеи">{milestonePath.map((step, index) => <span className={index === 0 ? 'current' : ''} key={step}>{step} {pluralDays(step)}</span>)}</div>
           </section>
-          <section className="heart-card" aria-labelledby="heart-title">
-            <div className="heart-heading"><div><span className="section-kicker">ТИХИЙ СИГНАЛ</span><h2 id="heart-title">Как твоё сердечко?</h2></div><Heart size={20} strokeWidth={1.5} /></div>
-            <p>{partner ? (visibleMood && visibleMoodBy === partner.id ? `${partner.name}: ${moodLabel}` : visibleMood && visibleMoodBy === me.id ? `Твой сигнал: ${moodLabel}. ${partner.name} его увидит.` : visibleMood ? `Сейчас в вашей истории: ${moodLabel}` : `Выбери чувство — ${partner.name} его увидит.`) : 'Выбери чувство для вашей истории.'}</p>
-            <div className="feeling-options">{feelings.map(feeling => <button key={feeling.label} className={moodLabel === feeling.label && visibleMoodBy === me.id ? 'selected' : ''} aria-pressed={moodLabel === feeling.label && visibleMoodBy === me.id} onClick={async () => { setHeartPreview(feeling.label); const saved = await update(previous => ({ ...previous, mood: feeling.label, moodBy: me.id })); setHeartPreview(null); if (saved) notify('Сердечко обновлено'); }} disabled={saving}><span>{feeling.emoji}</span><small>{feeling.label}</small></button>)}</div>
-          </section>
           <section className="upcoming-card" aria-labelledby="upcoming-title">
             <div className="upcoming-heading"><h2 id="upcoming-title">Ближайшие даты</h2><button onClick={() => go('dates')}>Все даты <ArrowRight size={15} /></button></div>
             {upcomingDates.length ? <div className="upcoming-list">{upcomingDates.map(item => {
@@ -325,6 +320,11 @@ export default function App({ session, onSession, onSave, connected, onReconnect
                 <div className="upcoming-count"><strong>{remaining === 0 ? 'Сегодня' : remaining}</strong>{remaining > 0 && <span>{pluralDays(remaining)}</span>}</div>
               </div>;
             })}</div> : <p className="upcoming-empty">Добавьте важную дату, чтобы видеть отсчёт до неё.</p>}
+          </section>
+          <section className="heart-card" aria-labelledby="heart-title">
+            <div className="heart-heading"><div><span className="section-kicker">ТИХИЙ СИГНАЛ</span><h2 id="heart-title">Как твоё сердечко?</h2></div><Heart size={20} strokeWidth={1.5} /></div>
+            <p>{partner ? (visibleMood && visibleMoodBy === partner.id ? `${partner.name}: ${moodLabel}` : visibleMood && visibleMoodBy === me.id ? `Твой сигнал: ${moodLabel}. ${partner.name} его увидит.` : visibleMood ? `Сейчас в вашей истории: ${moodLabel}` : `Выбери чувство — ${partner.name} его увидит.`) : 'Выбери чувство для вашей истории.'}</p>
+            <div className="feeling-options">{feelings.map(feeling => <button key={feeling.label} className={moodLabel === feeling.label && visibleMoodBy === me.id ? 'selected' : ''} aria-pressed={moodLabel === feeling.label && visibleMoodBy === me.id} onClick={async () => { setHeartPreview(feeling.label); const saved = await update(previous => ({ ...previous, mood: feeling.label, moodBy: me.id })); setHeartPreview(null); if (saved) notify('Сердечко обновлено'); }} disabled={saving}><span>{feeling.emoji}</span><small>{feeling.label}</small></button>)}</div>
           </section>
         </>}
 
