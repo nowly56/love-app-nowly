@@ -107,12 +107,13 @@ img { display: block; object-fit: cover; }
 
 .section-intro { margin: 21px 0 28px; }
 .section-intro h1 { margin-top: 9px; font-weight: 450; font-size: clamp(39px, 7vw, 54px); line-height: 1.06; letter-spacing: -.065em; }
+.dates-intro h1 { margin-top: 0; }
 .section-intro p { margin-top: 9px; color: #6f6561; font-size: 13px; }
 .add-button { width: 100%; display: flex; align-items: center; gap: 12px; padding: 16px 18px; margin-bottom: 20px; border-radius: 19px; border: 1px solid #fff; background: #ffffff9e; box-shadow: var(--glass-shadow); font-weight: 650; }
 .add-button > svg:last-child { margin-left: auto; color: #956b72; }
 .story-section { padding-top: 14px; }
 .story-toolbar, .story-toolbar > div, .story-shelf-actions, .story-page-actions, .story-page-bar { display: flex; align-items: center; }
-.story-toolbar { justify-content: space-between; gap: 12px; }
+.story-toolbar { justify-content: flex-end; gap: 12px; }
 .story-toolbar > div { gap: 7px; }
 .story-toolbar button { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid #ffffff9c; border-radius: 50%; background: #ffffff3e; color: #805f6c; }
 .story-toolbar button.active { background: #fffaf0ba; color: #8c4c66; box-shadow: 0 3px 11px #6a3f5515; }

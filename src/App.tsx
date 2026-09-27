@@ -329,7 +329,7 @@ export default function App({ session, onSession, onSave, connected, onReconnect
         </>}
 
         {page === 'memories' && <section className="story-section" aria-labelledby="story-title">
-          <div className="story-toolbar"><span className="section-kicker">СТРАНИЦЫ О НАС</span><div>
+          <div className="story-toolbar"><div>
             <button className={storyView !== 'grid' ? 'active' : ''} onClick={() => setStoryView('shelf')} aria-label="Книги воспоминаний" aria-pressed={storyView !== 'grid'}><BookOpen size={19} /></button>
             <button className={storyView === 'grid' ? 'active' : ''} onClick={() => setStoryView('grid')} aria-label="Сетка фотографий" aria-pressed={storyView === 'grid'}><Grid2X2 size={18} /></button>
           </div></div>
@@ -367,7 +367,7 @@ export default function App({ session, onSession, onSave, connected, onReconnect
         </section>}
 
         {page === 'dates' && <>
-          <div className="section-intro"><span className="section-kicker">ВРЕМЯ ДРУГ ДЛЯ ДРУГА</span><h1>Свидания</h1><p>Важные дни и планы на двоих.</p></div>
+          <div className="section-intro dates-intro"><h1>Свидания</h1><p>Важные дни и планы на двоих.</p></div>
           <section className="list-section">
             <div className="list-heading"><h2>Наши даты</h2><button className="circle-add" onClick={() => open({ type: 'date' })} aria-label="Добавить дату"><Plus size={20} /></button></div>
             {dates.length ? <div className="simple-list">{dates.map(item => <button className="simple-row" key={item.id} onClick={() => editDate(item)}><span className="row-symbol"><Heart size={18} strokeWidth={1.5} /></span><span className="row-copy"><strong>{item.title}</strong><small>{item.next.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}{item.annual ? ' · каждый год' : ''}</small></span><span className="row-meta">{daysUntil(item.next) === 0 ? 'Сегодня' : daysUntil(item.next) > 0 ? `через ${daysUntil(item.next)} дн.` : 'прошло'}</span></button>)}</div>
