@@ -15,7 +15,7 @@ export default function StorySpread({ memories, page, turn, onAdd }: Props) {
     {leaf(turn && forward ? turn.to : page, 'right')}
     {turn && <div className={`story-turning-leaf ${forward ? 'turn-forward' : 'turn-backward'}`} aria-hidden="true" inert>
       <div className="leaf-face leaf-front">{leaf(page, forward ? 'right' : 'left')}</div>
-      <div className="leaf-face leaf-back">{leaf(turn.to, forward ? 'left' : 'right')}</div>
+      <div className="leaf-face leaf-back" />
     </div>}
   </div>;
 }

@@ -185,7 +185,8 @@ export default function App({ session, onSession, onSave, connected, onReconnect
   }
   function moveStoryPage(direction: number) {
     if (turning.current) return;
-    const to = (storyPage + direction + storyPageCount) % storyPageCount;
+    const to = storyPage + direction;
+    if (to < 0 || to >= storyPageCount) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setStoryPage(to); return; }
     turning.current = true;
     setStoryTurn({ to, direction });
@@ -376,7 +377,7 @@ export default function App({ session, onSession, onSave, connected, onReconnect
             <div className="story-book-wrap" onTouchStart={event => { storyTouchX.current = { x: event.touches[0].clientX, y: event.touches[0].clientY }; }} onTouchEnd={event => storySwipeEnd('pages', event.changedTouches[0].clientX, event.changedTouches[0].clientY)}>
               <StorySpread memories={selectedAlbum.memories} page={storyPage} turn={storyTurn} onAdd={() => open({ type: 'memory' })} />
             </div>
-            <div className="story-page-number">{storyPage + 1} / {storyPageCount}</div><div className="story-page-actions"><button className="story-round-button" onClick={() => moveStoryPage(-1)} aria-label="Предыдущая страница"><ChevronLeft size={21} /></button>{selectedMemory && <button className="story-round-button" onClick={() => open({ type: 'detail', memory: selectedMemory })} aria-label="Открыть момент"><Images size={19} /></button>}<button className="story-round-button" onClick={() => open({ type: 'memory' })} aria-label="Добавить момент"><Plus size={21} /></button><button className="story-round-button" onClick={() => moveStoryPage(1)} aria-label="Следующая страница"><ChevronRight size={21} /></button></div>
+            <div className="story-page-number">{storyPage + 1} / {storyPageCount}</div><div className="story-page-actions"><button className="story-round-button" onClick={() => moveStoryPage(-1)} disabled={storyPage === 0 || !!storyTurn} aria-label="Предыдущая страница"><ChevronLeft size={21} /></button>{selectedMemory && <button className="story-round-button" onClick={() => open({ type: 'detail', memory: selectedMemory })} aria-label="Открыть момент"><Images size={19} /></button>}<button className="story-round-button" onClick={() => open({ type: 'memory' })} aria-label="Добавить момент"><Plus size={21} /></button><button className="story-round-button" onClick={() => moveStoryPage(1)} disabled={storyPage === storyPageCount - 1 || !!storyTurn} aria-label="Следующая страница"><ChevronRight size={21} /></button></div>
           </>}
 
           {storyView === 'grid' && <><button className="add-button" onClick={() => open({ type: 'memory' })}><Camera size={19} />Добавить момент <Plus size={17} /></button>{data.memories.length ? <div className="memory-grid">{[...data.memories].sort((a, b) => a.date.localeCompare(b.date)).map(memory => <button className="memory-tile" key={memory.id} onClick={() => open({ type: 'detail', memory })} aria-label={`Открыть момент: ${memory.title}`}><Photo src={memory.image} alt={memory.title} /><span><strong>{memory.title}</strong><small>{formatDate(memory.date)}</small></span></button>)}</div> : <div className="empty-state"><Images size={29} /><h2>Здесь начнётся ваша история</h2><p>Сохраните первую фотографию вместе.</p></div>}</>}
