@@ -450,3 +450,19 @@ test('invalid shared records and duplicate IDs cannot partially overwrite valid 
     assert.deepEqual(after.data.data, updated.data.data);
   }
 });
+
+test('books persist with their moments and reject unknown book references', async t => {
+  const { register, save, request } = await fixture(t);
+  const account = await register();
+  const result = await save(account, data => {
+    data.books.push({ id: 'summer', title: 'Наше лето', color: 'sage' });
+    data.memories.push({ id: 'photo', bookId: 'summer', title: 'Море', date: '2025-07-01', image: avatar, note: '', location: '', favorite: false });
+  });
+  assert.equal(result.status, 200);
+  const reloaded = await request('/api/session', { cookie: account.cookie });
+  assert.equal(reloaded.data.data.books.find(b => b.id === 'summer').title, 'Наше лето');
+  assert.equal(reloaded.data.data.memories[0].bookId, 'summer');
+  assert.equal((await save(account, data => { data.memories[0].bookId = 'missing'; })).status, 400);
+  assert.equal((await save(account, data => { data.books.push({ ...data.books[0] }); })).status, 400);
+  assert.equal((await save(account, data => { data.books[0].color = 'invalid'; })).status, 400);
+});

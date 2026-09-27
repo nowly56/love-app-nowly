@@ -295,3 +295,24 @@ img { display: block; object-fit: cover; }
   .story-spread::before, .story-photo-page img { animation: none; }
   .story-spread::before { display: none; }
 }
+
+/* The sheet has real front/back content and pivots around the book binding. */
+.story-spread { transform: rotate(-1deg); perspective: 1600px; transform-style: preserve-3d; }
+.story-spread::before { display: none; }
+.story-turning-leaf { position: absolute; z-index: 6; inset: 0 0 0 50%; transform-origin: left center; transform-style: preserve-3d; pointer-events: none; animation: sheet-forward 680ms cubic-bezier(.36,.08,.28,1) both; }
+.story-turning-leaf.turn-backward { inset: 0 50% 0 0; transform-origin: right center; animation-name: sheet-backward; }
+.leaf-face { position: absolute; inset: 0; display: grid; min-width: 0; min-height: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; background: #fffcf6; overflow: hidden; border-radius: 2px 10px 10px 2px; }
+.leaf-back { transform: rotateY(180deg); border-radius: 10px 2px 2px 10px; }
+.leaf-face::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg,#68504d42,transparent 40%,#68504d18); animation: sheet-shade 680ms ease-in-out both; }
+.story-spread.is-turning { pointer-events: none; }
+.story-photo-page img { animation: none; }
+@keyframes sheet-forward { 0% { transform: rotateY(0); filter: drop-shadow(-2px 2px 2px #47313018); } 50% { filter: drop-shadow(-18px 12px 10px #47313055); } 100% { transform: rotateY(-180deg); filter: drop-shadow(-1px 1px 1px #47313018); } }
+@keyframes sheet-backward { 0% { transform: rotateY(0); } 50% { filter: drop-shadow(18px 12px 10px #47313055); } 100% { transform: rotateY(180deg); } }
+@keyframes sheet-shade { 0%,100% { opacity: .12; } 50% { opacity: .9; } }
+.story-cover.cover-rose { background: linear-gradient(125deg,#c598a1,#8a5667); }
+.story-cover.cover-sage { background: linear-gradient(125deg,#a9b7a3,#5d7666); }
+.story-cover.cover-sand { background: linear-gradient(125deg,#d3b99b,#a47d59); }
+.story-cover.cover-lavender { background: linear-gradient(125deg,#b5a6cc,#77628d); }
+.story-cover-copy strong { overflow-wrap: anywhere; font-size: clamp(25px,8vw,38px); }
+.edit-form select { width: 100%; min-height: 46px; padding: 12px; border: 1px solid #cdb8bb; border-radius: 14px; background: #fff9; color: inherit; font: inherit; }
+@media (prefers-reduced-motion: reduce) { .story-turning-leaf, .leaf-face::after { animation-duration: 1ms; } }

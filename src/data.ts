@@ -7,7 +7,16 @@ export type Profile = {
   avatarSource?: 'telegram' | 'custom' | 'none'
 }
 
+export type StoryBook = { id: string; title: string; color: string }
+export function storyBooks(data: Pick<AppData, 'books' | 'memories'>): StoryBook[] {
+  if (data.books?.length) return data.books;
+  const years = [...new Set(data.memories.map(m => m.date.slice(0, 4)))].sort();
+  return years.length ? years.map(year => ({ id: `year:${year}`, title: year, color: 'rose' })) : [{ id: 'default', title: 'Наша история', color: 'rose' }];
+}
+export const memoryBookId = (memory: Memory) => memory.bookId || `year:${memory.date.slice(0, 4)}`;
+
 export type Memory = {
+  bookId?: string
   id: string
   title: string
   date: string
@@ -43,6 +52,7 @@ export type Message = {
 export type AppData = {
   startDate: string
   profiles: Profile[]
+  books?: StoryBook[]
   memories: Memory[]
   dates: ImportantDate[]
   plans: Plan[]
@@ -235,6 +245,7 @@ export function loadData(): AppData {
     return {
       startDate: isDate(stored.startDate) ? stored.startDate : fallback.startDate,
       profiles: profiles.length >= 2 ? profiles.slice(0, 2) : fallback.profiles,
+      ...(Array.isArray(stored.books) ? { books: stored.books.filter((b: StoryBook) => b && typeof b.id === 'string' && typeof b.title === 'string' && ['rose', 'sage', 'sand', 'lavender'].includes(b.color)) } : {}),
       memories: safeArray(stored.memories, isMemory, fallback.memories),
       dates: safeArray(stored.dates, isImportantDate, fallback.dates),
       plans: safeArray(stored.plans, isPlan, fallback.plans),

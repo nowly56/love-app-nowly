@@ -35,7 +35,7 @@ export default function AccountSettings({ session, onSession }: Props) {
   useEffect(() => { setName(own.name); setBirthday(own.birthday); setBio(own.bio); }, [own.id, own.name, own.birthday, own.bio]);
   useEffect(() => { setStartDate(session.data.startDate); }, [session.data.startDate]);
   const profileChanged = name !== own.name || birthday !== own.birthday || bio !== own.bio;
-  const hasPersonalRecords = session.data.memories.length > 0 || session.data.plans.length > 0 || session.data.messages.length > 0 || session.data.dates.some(item => item.id !== 'date-anniversary' && !item.id.startsWith('birthday:'));
+  const hasPersonalRecords = session.data.books?.some(b => b.id !== 'default' && !b.id.startsWith('year:')) || session.data.memories.length > 0 || session.data.plans.length > 0 || session.data.messages.length > 0 || session.data.dates.some(item => item.id !== 'date-anniversary' && !item.id.startsWith('birthday:'));
 
   async function saveProfile(event: FormEvent) {
     event.preventDefault();

@@ -58,6 +58,11 @@ export function createApi({ filename = process.env.DATABASE_PATH || resolve(proc
   function snapshot(user) {
     const space = db.prepare('SELECT * FROM spaces WHERE id=?').get(user.space);
     const data = JSON.parse(space.data);
+    if (!data.books?.length) {
+      const years = [...new Set(data.memories.map(m => m.date.slice(0,4)))].sort();
+      data.books = years.length ? years.map(year => ({id:'year:'+year,title:year,color:'rose'})) : [{id:'default',title:'Наша история',color:'rose'}];
+    }
+    data.memories = data.memories.map(m => ({...m,bookId:m.bookId || 'year:'+m.date.slice(0,4)}));
     data.profiles = db.prepare('SELECT profile FROM users WHERE space=? ORDER BY rowid').all(user.space).map(row => JSON.parse(row.profile));
     return { user: { id: user.id, email: user.email.endsWith('@telegram.blizhe.invalid') ? null : user.email, telegram: Boolean(user.telegram_id) }, data, revision: space.revision, spaceId: space.id };
   }
@@ -257,7 +262,7 @@ export function createApi({ filename = process.env.DATABASE_PATH || resolve(proc
         const invite = db.prepare('SELECT * FROM invites WHERE code=? AND expires>?').get(hash(text(body.code,32,true).toUpperCase()),Date.now());
         if (!invite || invite.space === user.space) fail(400,'Код приглашения недействителен или истёк');
         const current = snapshot(user);
-        if (current.data.profiles.length > 1 || current.data.memories.length || current.data.plans.length || current.data.messages.length || current.data.dates.some(x=>x.id!=='date-anniversary'&&!x.id.startsWith('birthday:'))) fail(409,'Присоединиться можно из пустого личного пространства. Сначала сохраните резервную копию и удалите свои записи');
+        if (current.data.profiles.length > 1 || current.data.books.some(b=>b.id!=='default'&&!b.id.startsWith('year:')) || current.data.memories.length || current.data.plans.length || current.data.messages.length || current.data.dates.some(x=>x.id!=='date-anniversary'&&!x.id.startsWith('birthday:'))) fail(409,'Присоединиться можно из пустого личного пространства. Сначала сохраните резервную копию и удалите свои записи');
         if (db.prepare('SELECT COUNT(*) AS n FROM users WHERE space=?').get(invite.space).n >= 2) fail(409,'В этой паре уже два человека');
         db.exec('BEGIN');
         try {
@@ -284,7 +289,13 @@ export function createApi({ filename = process.env.DATABASE_PATH || resolve(proc
           const ids = new Set();
           return input[key].map(item=>{if(!item || typeof item!=='object') fail(400,'Некорректная запись'); const id=text(item.id,100,true); if(ids.has(id)) fail(400,'Повторяющаяся запись'); ids.add(id); return {id,...parse(item)};});
         };
-        data.memories=readList('memories',m=>({title:text(m.title,80,true),date:date(m.date),location:text(m.location,80),image:photo(m.image),note:text(m.note,1500),favorite:m.favorite===true}),300);
+        if (input.books === undefined) input.books = current.data.books;
+        data.books=readList('books',b=>{const color=text(b.color,20,true); if(!['rose','sage','sand','lavender'].includes(color)) fail(400,'Некорректный цвет книги'); return {title:text(b.title,80,true),color};},100);
+        if(!data.books.length) fail(400,'Оставьте хотя бы одну книгу');
+        const bookIds=new Set(data.books.map(b=>b.id));
+        const priorMemories=new Map(current.data.memories.map(m=>[m.id,m]));
+        const bookFor=m=>{const id=m.bookId || priorMemories.get(m.id)?.bookId || data.books[0].id; if(!bookIds.has(id)) fail(400,'Книга не найдена'); return id;};
+        data.memories=readList('memories',m=>({bookId:bookFor(m),title:text(m.title,80,true),date:date(m.date),location:text(m.location,80),image:photo(m.image),note:text(m.note,1500),favorite:m.favorite===true}),300);
         data.plans=readList('plans',p=>({title:text(p.title,100,true),date:date(p.date,true),category:text(p.category,50,true),done:p.done===true}));
         data.dates=readList('dates',d=>({title:text(d.title,100,true),date:date(d.date),emoji:text(d.emoji,20),annual:d.annual===true}));
         // Existing messages are immutable; new messages always belong to the authenticated user.

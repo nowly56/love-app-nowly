@@ -5,12 +5,15 @@ import type { LucideIcon } from 'lucide-react';
 import { dayCount, daysUntil, formatDate, imageFileToDataUrl, nextOccurrence, pluralDays, uniqueId } from './data';
 import type { AppData, ImportantDate, Memory, Plan } from './data';
 import type { SessionSnapshot } from './api';
+import StorySpread from './StorySpread';
+import { storyBooks, memoryBookId } from './data';
 import AccountSettings from './AccountSettings';
 import { telegramWebApp } from './telegram';
 
 type Page = 'home' | 'memories' | 'dates' | 'profiles';
 type ModalState =
   | null
+  | { type: 'book' }
   | { type: 'memory'; memory?: Memory }
   | { type: 'date'; date?: ImportantDate }
   | { type: 'plan'; plan?: Plan }
@@ -120,10 +123,13 @@ export default function App({ session, onSession, onSave, connected, onReconnect
   const [storyView, setStoryView] = useState<'shelf' | 'pages' | 'grid'>('shelf');
   const [storyYear, setStoryYear] = useState<string | null>(null);
   const [storyPage, setStoryPage] = useState(0);
-  const [storyFlip, setStoryFlip] = useState<'next' | 'previous'>('next');
+  const [storyTurn, setStoryTurn] = useState<{ to: number; direction: number } | null>(null);
+  const turning = useRef(false);
+  const turnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (turnTimer.current) clearTimeout(turnTimer.current); }, []);
   const [currentDay, setCurrentDay] = useState(todayString);
   const frameRef = useRef<HTMLDivElement>(null);
-  const storyTouchX = useRef<number | null>(null);
+  const storyTouchX = useRef<{ x: number; y: number } | null>(null);
   const storyLastSwipe = useRef(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const days = dayCount(data.startDate);
@@ -142,15 +148,8 @@ export default function App({ session, onSession, onSave, connected, onReconnect
     }), [data.dates, currentDay]);
   const upcomingDates = dates.filter(item => daysUntil(item.next) >= 0).slice(0, 3);
   const plans = useMemo(() => [...data.plans].sort((a, b) => Number(a.done) - Number(b.done) || (a.date || '9999').localeCompare(b.date || '9999')), [data.plans]);
-  const storyAlbums = useMemo(() => {
-    const groups = new Map<string, Memory[]>();
-    for (const memory of [...data.memories].sort((a, b) => a.date.localeCompare(b.date))) {
-      const year = memory.date.slice(0, 4);
-      groups.set(year, [...(groups.get(year) || []), memory]);
-    }
-    return [...groups].sort(([a], [b]) => a.localeCompare(b)).map(([year, memories]) => ({ year, memories }));
-  }, [data.memories]);
-  const shelfAlbums = storyAlbums.length ? storyAlbums : [{ year: currentDay.slice(0, 4), memories: [] as Memory[] }];
+  const storyAlbums = useMemo(() => storyBooks(data).map(book => ({ ...book, year: book.id, memories: data.memories.filter(m => memoryBookId(m) === book.id).sort((a,b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)) })), [data.books, data.memories]);
+  const shelfAlbums = storyAlbums;
   const selectedAlbumIndex = Math.max(0, shelfAlbums.findIndex(album => album.year === storyYear));
   const selectedAlbum = shelfAlbums[selectedAlbumIndex];
   const storyPageCount = Math.max(2, selectedAlbum.memories.length);
@@ -185,14 +184,19 @@ export default function App({ session, onSession, onSave, connected, onReconnect
     setStoryYear(shelfAlbums[next].year);
   }
   function moveStoryPage(direction: number) {
-    setStoryFlip(direction > 0 ? 'next' : 'previous');
-    setStoryPage(previous => (previous + direction + storyPageCount) % storyPageCount);
+    if (turning.current) return;
+    const to = (storyPage + direction + storyPageCount) % storyPageCount;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setStoryPage(to); return; }
+    turning.current = true;
+    setStoryTurn({ to, direction });
+    turnTimer.current = setTimeout(() => { setStoryPage(to); setStoryTurn(null); turning.current = false; }, 680);
   }
-  function storySwipeEnd(mode: 'shelf' | 'pages', endX: number) {
+  function storySwipeEnd(mode: 'shelf' | 'pages', endX: number, endY: number) {
     if (storyTouchX.current === null) return;
-    const distance = endX - storyTouchX.current;
+    const distance = endX - storyTouchX.current.x;
+    const vertical = endY - storyTouchX.current.y;
     storyTouchX.current = null;
-    if (Math.abs(distance) < 45) return;
+    if (Math.abs(distance) < 45 || Math.abs(vertical) > Math.abs(distance)) return;
     storyLastSwipe.current = Date.now();
     if (mode === 'shelf') moveStoryAlbum(distance < 0 ? 1 : -1);
     else moveStoryPage(distance < 0 ? 1 : -1);
@@ -234,10 +238,14 @@ export default function App({ session, onSession, onSave, connected, onReconnect
     const value = (name: string) => String(values.get(name) || '').trim();
     let success = false;
     let savedMemory: Memory | null = null;
-    if (modal?.type === 'memory') {
+    if (modal?.type === 'book') {
+      const book = { id: uniqueId(), title: value('title'), color: value('color') };
+      success = await update(previous => ({ ...previous, books: [...storyBooks(previous), book] }));
+      if (success) { setStoryYear(book.id); setStoryPage(0); setStoryView('shelf'); }
+    } else if (modal?.type === 'memory') {
       if (!upload) { setFormError('Добавьте фотографию'); return; }
       const memory: Memory = {
-        id: modal.memory?.id || uniqueId(), title: value('title'), date: value('date'),
+        bookId: value('bookId'), id: modal.memory?.id || uniqueId(), title: value('title'), date: value('date'),
         image: upload, note: value('note'), location: value('location'), favorite: modal.memory?.favorite || false,
       };
       savedMemory = memory;
@@ -264,11 +272,11 @@ export default function App({ session, onSession, onSave, connected, onReconnect
     if (success) {
       setModal(null);
       if (savedMemory) {
-        const savedYear = savedMemory.date.slice(0, 4);
+        const savedYear = savedMemory.bookId!;
         const updatedMemories = modal?.type === 'memory' && modal.memory
           ? data.memories.map(item => item.id === savedMemory.id ? savedMemory : item)
           : [savedMemory, ...data.memories];
-        const savedPage = updatedMemories.filter(item => item.date.startsWith(savedYear))
+        const savedPage = updatedMemories.filter(item => memoryBookId(item) === savedYear)
           .sort((a, b) => a.date.localeCompare(b.date)).findIndex(item => item.id === savedMemory.id);
         setStoryYear(savedYear);
         setStoryPage(Math.max(0, savedPage));
@@ -347,34 +355,26 @@ export default function App({ session, onSession, onSave, connected, onReconnect
           <div className="story-intro"><h1 id="story-title">История</h1><p>{memoryCountText(data.memories.length)} · {storyAlbums.length || 1} {countWord(storyAlbums.length || 1, 'книга', 'книги', 'книг')}</p></div>
 
           {storyView === 'shelf' && <>
-            <div className="story-carousel" onTouchStart={event => { storyTouchX.current = event.touches[0].clientX; }} onTouchEnd={event => storySwipeEnd('shelf', event.changedTouches[0].clientX)}>
+            <div className="story-carousel" onTouchStart={event => { storyTouchX.current = { x: event.touches[0].clientX, y: event.touches[0].clientY }; }} onTouchEnd={event => storySwipeEnd('shelf', event.changedTouches[0].clientX, event.changedTouches[0].clientY)}>
               {shelfAlbums.map((album, index) => {
                 const position = index - selectedAlbumIndex;
-                return <button key={album.year} className={`story-cover ${position === 0 ? 'is-current' : position === -1 ? 'is-previous' : position === 1 ? 'is-next' : 'is-hidden'}`} tabIndex={Math.abs(position) <= 1 ? 0 : -1} aria-hidden={Math.abs(position) > 1} aria-label={`Книга ${album.year}, ${memoryCountText(album.memories.length)}`} onClick={() => { if (Date.now() - storyLastSwipe.current < 350) return; if (position === 0) { setStoryPage(0); setStoryView('pages'); } else setStoryYear(album.year); }}>
+                return <button key={album.year} className={`story-cover cover-${album.color} ${position === 0 ? 'is-current' : position === -1 ? 'is-previous' : position === 1 ? 'is-next' : 'is-hidden'}`} tabIndex={Math.abs(position) <= 1 ? 0 : -1} aria-hidden={Math.abs(position) > 1} aria-label={`Книга ${album.title}, ${memoryCountText(album.memories.length)}`} onClick={() => { if (Date.now() - storyLastSwipe.current < 350) return; if (position === 0) { setStoryPage(0); setStoryView('pages'); } else setStoryYear(album.year); }}>
                   {album.memories[0] && <Photo src={album.memories[0].image} alt="" />}
                   <span className="story-cover-shade" />
-                  <span className="story-cover-copy"><small>SINCE US · {album.year}</small><strong>Наша<br />история</strong><em>{memoryCountText(album.memories.length)}</em></span>
+                  <span className="story-cover-copy"><small>SINCE US</small><strong>{album.title}</strong><em>{memoryCountText(album.memories.length)}</em></span>
                   <span className="story-cover-spine" aria-hidden="true" />
                 </button>;
               })}
             </div>
-            <div className="story-shelf-caption"><strong>{selectedAlbum.year}</strong><span>{selectedAlbum.memories.length ? 'Коснись обложки, чтобы открыть' : 'Здесь появится ваша первая глава'}</span></div>
+            <div className="story-shelf-caption"><strong>{selectedAlbum.title}</strong><span>{selectedAlbum.memories.length ? 'Коснись обложки, чтобы открыть' : 'Здесь появится ваша первая глава'}</span></div>
             <div className="story-shelf-actions"><button className="story-round-button" onClick={() => moveStoryAlbum(-1)} disabled={selectedAlbumIndex === 0} aria-label="Предыдущая книга"><ChevronLeft size={21} /></button><button className="story-open-button" onClick={() => { setStoryPage(0); setStoryView('pages'); }}><BookOpen size={18} />Открыть книгу</button><button className="story-round-button" onClick={() => moveStoryAlbum(1)} disabled={selectedAlbumIndex === shelfAlbums.length - 1} aria-label="Следующая книга"><ChevronRight size={21} /></button></div>
-            <button className="story-add-button" onClick={() => open({ type: 'memory' })}><Plus size={18} />Добавить момент</button>
+            <button className="story-add-button" onClick={() => open({ type: 'book' })}><Plus size={18} />Создать книгу</button>
           </>}
 
           {storyView === 'pages' && <>
-            <div className="story-page-bar"><button onClick={() => setStoryView('shelf')}><ArrowLeft size={17} />К обложкам</button><span>{selectedAlbum.year}</span></div>
-            <div className="story-book-wrap" onTouchStart={event => { storyTouchX.current = event.touches[0].clientX; }} onTouchEnd={event => storySwipeEnd('pages', event.changedTouches[0].clientX)}>
-              <div className={`story-spread flip-${storyFlip}`} key={`${selectedAlbum.year}-${storyPage}-${selectedMemory?.id || 'blank'}`}>
-                {selectedMemory ? <>
-                  <div className="story-photo-page"><Photo src={selectedMemory.image} alt={selectedMemory.title} /></div>
-                  <div className="story-copy-page"><small>СТРАНИЦА {String(storyPage + 1).padStart(2, '0')}</small><h2>{selectedMemory.title}</h2>{selectedMemory.note && <p>{selectedMemory.note}</p>}<span>{dateText(selectedMemory.date)}{selectedMemory.location && <> · {selectedMemory.location}</>}</span></div>
-                </> : <>
-                  <div className="story-photo-page story-blank-page"><Heart size={40} strokeWidth={1.1} /><span>SINCE US</span></div>
-                  <div className="story-copy-page"><small>СТРАНИЦА {String(storyPage + 1).padStart(2, '0')}</small><h2>{storyPage === 0 ? 'Первая страница ещё впереди' : 'Здесь будет ваша история'}</h2><p>{storyPage === 0 ? 'Добавьте фотографию, которую хочется сохранить.' : 'Каждый новый момент может стать страницей вашей книги.'}</p><button className="story-blank-add" onClick={() => open({ type: 'memory' })}><Plus size={15} />Добавить момент</button></div>
-                </>}
-              </div>
+            <div className="story-page-bar"><button disabled={!!storyTurn} onClick={() => setStoryView('shelf')}><ArrowLeft size={17} />К обложкам</button><span>{selectedAlbum.title}</span></div>
+            <div className="story-book-wrap" onTouchStart={event => { storyTouchX.current = { x: event.touches[0].clientX, y: event.touches[0].clientY }; }} onTouchEnd={event => storySwipeEnd('pages', event.changedTouches[0].clientX, event.changedTouches[0].clientY)}>
+              <StorySpread memories={selectedAlbum.memories} page={storyPage} turn={storyTurn} onAdd={() => open({ type: 'memory' })} />
             </div>
             <div className="story-page-number">{storyPage + 1} / {storyPageCount}</div><div className="story-page-actions"><button className="story-round-button" onClick={() => moveStoryPage(-1)} aria-label="Предыдущая страница"><ChevronLeft size={21} /></button>{selectedMemory && <button className="story-round-button" onClick={() => open({ type: 'detail', memory: selectedMemory })} aria-label="Открыть момент"><Images size={19} /></button>}<button className="story-round-button" onClick={() => open({ type: 'memory' })} aria-label="Добавить момент"><Plus size={21} /></button><button className="story-round-button" onClick={() => moveStoryPage(1)} aria-label="Следующая страница"><ChevronRight size={21} /></button></div>
           </>}
@@ -403,9 +403,11 @@ export default function App({ session, onSession, onSave, connected, onReconnect
     <nav className="bottom-nav" aria-label="Основная навигация"><span className="nav-indicator" aria-hidden="true" style={{ transform: `translateX(${navigation.findIndex(item => item.id === page) * 100}%)` }} />{navigation.map(({ id, label, icon: Icon }) => <button key={id} className={page === id ? 'active' : ''} onClick={() => go(id)} aria-current={page === id ? 'page' : undefined}><Icon size={21} strokeWidth={1.7} fill={page === id && id === 'home' ? 'currentColor' : 'none'} /><span>{label}</span></button>)}</nav>
     {toast && <div className="toast" role="status">{toast}</div>}
 
-    {modal && <Modal key={modal.type} title={modal.type === 'memory' ? modal.memory ? 'Изменить момент' : 'Новый момент' : modal.type === 'date' ? modal.date ? 'Изменить дату' : 'Новая дата' : modal.type === 'plan' ? modal.plan ? 'Изменить план' : 'Новый план' : modal.type === 'detail' ? modal.memory.title : 'Удалить запись?'} close={() => { if (!saving) setModal(null); }}>
-      {(modal.type === 'memory' || modal.type === 'date' || modal.type === 'plan') && <form className="edit-form" onSubmit={saveForm}>
+    {modal && <Modal key={modal.type} title={modal.type === 'book' ? 'Новая книга' : modal.type === 'memory' ? modal.memory ? 'Изменить момент' : 'Новый момент' : modal.type === 'date' ? modal.date ? 'Изменить дату' : 'Новая дата' : modal.type === 'plan' ? modal.plan ? 'Изменить план' : 'Новый план' : modal.type === 'detail' ? modal.memory.title : 'Удалить запись?'} close={() => { if (!saving) setModal(null); }}>
+      {(modal.type === 'book' || modal.type === 'memory' || modal.type === 'date' || modal.type === 'plan') && <form className="edit-form" onSubmit={saveForm}>
+        {modal.type === 'book' && <><label>Название<input name="title" required maxLength={80} placeholder="Наше первое лето" /></label><label>Обложка<select name="color" defaultValue="rose"><option value="rose">Пыльная роза</option><option value="sage">Шалфей</option><option value="sand">Песочный</option><option value="lavender">Лаванда</option></select></label></>}
         {modal.type === 'memory' && <>
+          <label>Книга<select name="bookId" defaultValue={modal.memory ? memoryBookId(modal.memory) : selectedAlbum.id}>{shelfAlbums.map(book => <option key={book.id} value={book.id}>{book.title}</option>)}</select></label>
           <label className={`upload-zone ${upload ? 'has-photo' : ''}`}>{upload ? <Photo src={upload} alt="Выбранная фотография" /> : <><Camera size={28} /><span>Добавить фотографию</span></>}<input type="file" accept="image/jpeg,image/png,image/webp" aria-label="Загрузить фотографию" onChange={event => choosePhoto(event.target.files?.[0])} disabled={saving} /></label>
           <label>Название<input name="title" required maxLength={80} defaultValue={modal.memory?.title} placeholder="Наш маленький момент" /></label>
           <label>Дата<input type="date" name="date" required max={todayString()} defaultValue={modal.memory?.date || todayString()} /></label>
