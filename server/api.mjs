@@ -3,6 +3,7 @@ import { randomBytes, randomUUID, scrypt, timingSafeEqual, createHash, createHma
 import { promisify } from 'node:util';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { resourceRoute } from './resources.mjs';
 
 const derive = promisify(scrypt);
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -160,7 +161,8 @@ export function createApi({ filename = process.env.DATABASE_PATH || resolve(proc
       let body = {};
       if (mutating) {
         let size = 0; const chunks = [];
-        for await (const chunk of req) { size += chunk.length; if (size > 25_000_000) fail(413, 'Слишком много фотографий в одном запросе'); chunks.push(chunk); }
+        const bodyLimit = /^\/api\/(books|memories|dates|plans)(\/|$)/.test(path) ? 3_100_000 : 25_000_000;
+        for await (const chunk of req) { size += chunk.length; if (size > bodyLimit) fail(413, 'Слишком много данных в одном запросе'); chunks.push(chunk); }
         try { body = JSON.parse(Buffer.concat(chunks).toString() || '{}'); } catch { fail(400, 'Некорректный запрос'); }
         if (!body || typeof body !== 'object' || Array.isArray(body)) fail(400, 'Некорректный запрос');
       }
@@ -231,6 +233,11 @@ export function createApi({ filename = process.env.DATABASE_PATH || resolve(proc
       const stored = db.prepare('SELECT user FROM sessions WHERE token=? AND expires>?').get(hash(token),Date.now());
       const user = stored && userById(stored.user);
       if (!user) fail(401,'Войдите в аккаунт');
+      if (path === '/api/sync' && req.method === 'GET') {
+        const space = db.prepare('SELECT revision FROM spaces WHERE id=?').get(user.space);
+        return send({ spaceId:user.space, revision:space.revision });
+      }
+      if (resourceRoute({ req, res, body, user, db, snapshot, text, date, photo, fail, send })) return;
       if (path === '/api/session' && req.method === 'GET') return send(snapshot(user));
       if (path === '/api/logout' && req.method === 'POST') {
         db.prepare('DELETE FROM sessions WHERE token=?').run(hash(token));

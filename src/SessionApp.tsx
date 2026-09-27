@@ -3,6 +3,7 @@ import { Heart, RefreshCw, WifiOff } from 'lucide-react';
 import App from './App';
 import AuthScreen from './AuthScreen';
 import { api, ApiError } from './api';
+import { saveSharedData } from './saveSharedData';
 import type { SessionSnapshot } from './api';
 import type { AppData } from './data';
 import { telegramInitData } from './telegram';
@@ -47,6 +48,12 @@ export default function SessionApp() {
         if (generation === epoch.current) accept(telegramSession);
         return;
       }
+      const current = sessionRef.current;
+      if (current) {
+        const version = await api<{ spaceId: string; revision: number }>('/api/sync');
+        if (generation !== epoch.current) return;
+        if (version.spaceId === current.spaceId && version.revision === current.revision) { setConnected(true); return; }
+      }
       const next = await api<SessionSnapshot>('/api/session');
       if (generation === epoch.current) accept(next);
     } catch (err) {
@@ -75,7 +82,7 @@ export default function SessionApp() {
     if (!current) throw new Error('Сначала войдите в аккаунт');
     saving.current = true;
     try {
-      const next = await api<SessionSnapshot>('/api/data', { revision: current.revision, data: change(current.data) });
+      const next = await saveSharedData(current, change(current.data));
       accept(next);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) clear();

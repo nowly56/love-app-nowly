@@ -12,12 +12,12 @@ export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
 }
 
-export async function api<T>(path: string, body?: unknown): Promise<T> {
+export async function api<T>(path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST'): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 25000);
   try {
     const response = await fetch(path, {
-      method: body === undefined ? 'GET' : 'POST',
+      method,
       credentials: 'same-origin',
       cache: 'no-store',
       headers: body === undefined ? {} : { 'Content-Type': 'application/json', 'X-Blizhe-Client': '1' },

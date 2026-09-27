@@ -466,3 +466,58 @@ test('books persist with their moments and reject unknown book references', asyn
   assert.equal((await save(account, data => { data.books.push({ ...data.books[0] }); })).status, 400);
   assert.equal((await save(account, data => { data.books[0].color = 'invalid'; })).status, 400);
 });
+
+test('resource writes are shared, compact and cannot overwrite a newer revision', async t => {
+  const { pair, request } = await fixture(t);
+  const { anna, sasha, joined } = await pair();
+  const version = await request('/api/sync', {cookie:anna.cookie});
+  assert.deepEqual(Object.keys(version.data).sort(), ['revision','spaceId']);
+  const created = await request('/api/books', {cookie:anna.cookie,body:{revision:version.data.revision,item:{id:'trip',title:'Поездка',color:'sand'}}});
+  assert.equal(created.status,201);
+  assert.equal(created.data.data,undefined);
+  const stale = await request('/api/books/trip', {cookie:sasha.cookie,method:'PATCH',body:{revision:version.data.revision,item:{title:'Другое'}}});
+  assert.equal(stale.status,409);
+  const photo = await request('/api/memories', {cookie:sasha.cookie,body:{revision:created.data.revision,item:{id:'sea',bookId:'trip',title:'Море',date:'2026-01-02',image:avatar}}});
+  assert.equal(photo.status,201);
+  const edited = await request('/api/memories/sea', {cookie:anna.cookie,method:'PATCH',body:{revision:photo.data.revision,item:{title:'Наше море',spaceId:'foreign'}}});
+  assert.equal(edited.status,200);
+  assert.equal(edited.data.item.image,avatar);
+  assert.equal(edited.data.item.spaceId,undefined);
+  const partner = await request('/api/memories/sea', {cookie:sasha.cookie});
+  assert.equal(partner.data.item.title,'Наше море');
+  assert.equal((await request('/api/books/trip',{cookie:anna.cookie,method:'DELETE',body:{revision:edited.data.revision}})).status,409);
+  assert.equal((await request('/api/sync',{cookie:sasha.cookie})).data.spaceId,joined.data.spaceId);
+});
+
+test('resource access stays inside a space and failed mutations preserve records', async t => {
+  const { register, request } = await fixture(t);
+  const a = await register(), b = await register('other@example.test');
+  const created = await request('/api/plans',{cookie:a.cookie,body:{revision:a.data.revision,item:{id:'private',title:'Вместе',category:'Свидание'}}});
+  assert.equal(created.status,201);
+  assert.equal((await request('/api/plans/private')).status,401);
+  assert.equal((await request('/api/plans/private',{cookie:b.cookie})).status,404);
+  assert.equal((await request('/api/plans/private',{cookie:b.cookie,method:'DELETE',body:{revision:b.data.revision}})).status,404);
+  assert.equal((await request('/api/plans/private',{cookie:a.cookie,method:'PATCH',body:{revision:created.data.revision,item:{date:'bad'}}})).status,400);
+  const unchanged = await request('/api/plans/private',{cookie:a.cookie});
+  assert.equal(unchanged.data.revision,created.data.revision);
+  assert.equal(unchanged.data.item.title,'Вместе');
+  assert.equal((await request('/api/plans/private',{cookie:a.cookie,method:'DELETE',body:{}})).status,400);
+  const removed = await request('/api/plans/private',{cookie:a.cookie,method:'DELETE',body:{revision:created.data.revision}});
+  assert.equal(removed.status,200);
+  assert.equal((await request('/api/plans/private',{cookie:a.cookie})).status,404);
+});
+
+test('resource lists paginate chronologically and protect generated dates', async t => {
+  const { register, request } = await fixture(t);
+  const account = await register(); let revision = account.data.revision;
+  for (const [id,date] of [['later','2026-02-01'],['earlier','2026-01-01']]) {
+    const result = await request('/api/memories',{cookie:account.cookie,body:{revision,item:{id,bookId:'default',title:id,date,image:avatar}}});
+    assert.equal(result.status,201); revision=result.data.revision;
+  }
+  const first = await request('/api/memories?bookId=default&limit=1',{cookie:account.cookie});
+  assert.equal(first.data.items[0].id,'earlier'); assert.equal(first.data.nextOffset,1);
+  const last = await request('/api/memories?limit=1&offset=1',{cookie:account.cookie});
+  assert.equal(last.data.items[0].id,'later'); assert.equal(last.data.nextOffset,null);
+  assert.equal((await request('/api/memories?limit=1000',{cookie:account.cookie})).status,400);
+  assert.equal((await request('/api/dates',{cookie:account.cookie,body:{revision,item:{id:'date-anniversary',title:'Подмена',date:'2026-01-01'}}})).status,400);
+});
