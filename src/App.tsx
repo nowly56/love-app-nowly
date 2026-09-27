@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { ArrowDownToLine, ArrowRight, CalendarDays, Camera, Check, Heart, Images, MapPin, Plus, Settings2, Trash2, X } from 'lucide-react';
+import { ArrowDownToLine, ArrowLeft, ArrowRight, BookOpen, CalendarDays, Camera, Check, ChevronLeft, ChevronRight, Grid2X2, Heart, Images, MapPin, Plus, Settings2, Trash2, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { dayCount, daysUntil, formatDate, imageFileToDataUrl, nextOccurrence, pluralDays, uniqueId } from './data';
 import type { AppData, ImportantDate, Memory, Plan } from './data';
@@ -61,6 +61,8 @@ const nextMilestone = (days: number) => {
   return { target, remaining: target - days, progress: Math.round(((days - previous) / (target - previous)) * 100) };
 };
 const dateText = (date: string) => formatDate(date, { day: 'numeric', month: 'long', year: 'numeric' }).replace(' г.', '');
+const countWord = (count: number, one: string, few: string, many: string) => count % 100 >= 11 && count % 100 <= 14 ? many : count % 10 === 1 ? one : count % 10 >= 2 && count % 10 <= 4 ? few : many;
+const memoryCountText = (count: number) => `${count} ${countWord(count, 'момент', 'момента', 'моментов')}`;
 const milestoneDate = (startDate: string, days: number) => {
   const [year, month, day] = startDate.split('-').map(Number);
   return new Date(year, month - 1, day + days).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).replace(' г.', '');
@@ -115,8 +117,14 @@ export default function App({ session, onSession, onSave, connected, onReconnect
   const [upload, setUpload] = useState('');
   const [toast, setToast] = useState('');
   const [heartPreview, setHeartPreview] = useState<string | null>(null);
+  const [storyView, setStoryView] = useState<'shelf' | 'pages' | 'grid'>('shelf');
+  const [storyYear, setStoryYear] = useState<string | null>(null);
+  const [storyPage, setStoryPage] = useState(0);
+  const [storyFlip, setStoryFlip] = useState<'next' | 'previous'>('next');
   const [currentDay, setCurrentDay] = useState(todayString);
   const frameRef = useRef<HTMLDivElement>(null);
+  const storyTouchX = useRef<number | null>(null);
+  const storyLastSwipe = useRef(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const days = dayCount(data.startDate);
   const milestone = nextMilestone(days);
@@ -134,6 +142,18 @@ export default function App({ session, onSession, onSave, connected, onReconnect
     }), [data.dates, currentDay]);
   const upcomingDates = dates.filter(item => daysUntil(item.next) >= 0).slice(0, 3);
   const plans = useMemo(() => [...data.plans].sort((a, b) => Number(a.done) - Number(b.done) || (a.date || '9999').localeCompare(b.date || '9999')), [data.plans]);
+  const storyAlbums = useMemo(() => {
+    const groups = new Map<string, Memory[]>();
+    for (const memory of [...data.memories].sort((a, b) => b.date.localeCompare(a.date))) {
+      const year = memory.date.slice(0, 4);
+      groups.set(year, [...(groups.get(year) || []), memory]);
+    }
+    return [...groups].sort(([a], [b]) => b.localeCompare(a)).map(([year, memories]) => ({ year, memories }));
+  }, [data.memories]);
+  const shelfAlbums = storyAlbums.length ? storyAlbums : [{ year: currentDay.slice(0, 4), memories: [] as Memory[] }];
+  const selectedAlbumIndex = Math.max(0, shelfAlbums.findIndex(album => album.year === storyYear));
+  const selectedAlbum = shelfAlbums[selectedAlbumIndex];
+  const selectedMemory = selectedAlbum.memories[Math.min(storyPage, selectedAlbum.memories.length - 1)];
 
   useEffect(() => {
     const onHash = () => { setPage(routePage()); setModal(null); frameRef.current?.scrollTo(0, 0); };
@@ -151,12 +171,30 @@ export default function App({ session, onSession, onSave, connected, onReconnect
   }, [page, modal]);
   useEffect(() => { const timer = setInterval(() => setCurrentDay(todayString()), 60_000); return () => clearInterval(timer); }, []);
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+  useEffect(() => { setStoryPage(current => Math.min(current, Math.max(0, selectedAlbum.memories.length - 1))); }, [selectedAlbum.year, selectedAlbum.memories.length]);
 
   function go(next: Page) {
     window.location.hash = next;
     setPage(next);
     setModal(null);
     frameRef.current?.scrollTo(0, 0);
+  }
+  function moveStoryAlbum(direction: number) {
+    const next = Math.max(0, Math.min(shelfAlbums.length - 1, selectedAlbumIndex + direction));
+    setStoryYear(shelfAlbums[next].year);
+  }
+  function moveStoryPage(direction: number) {
+    setStoryFlip(direction > 0 ? 'next' : 'previous');
+    setStoryPage(previous => Math.max(0, Math.min(selectedAlbum.memories.length - 1, previous + direction)));
+  }
+  function storySwipeEnd(mode: 'shelf' | 'pages', endX: number) {
+    if (storyTouchX.current === null) return;
+    const distance = endX - storyTouchX.current;
+    storyTouchX.current = null;
+    if (Math.abs(distance) < 45) return;
+    storyLastSwipe.current = Date.now();
+    if (mode === 'shelf') moveStoryAlbum(distance < 0 ? 1 : -1);
+    else moveStoryPage(distance < 0 ? 1 : -1);
   }
   function open(next: ModalState) {
     if (saving) return;
@@ -194,12 +232,14 @@ export default function App({ session, onSession, onSave, connected, onReconnect
     const values = new FormData(event.currentTarget);
     const value = (name: string) => String(values.get(name) || '').trim();
     let success = false;
+    let savedMemory: Memory | null = null;
     if (modal?.type === 'memory') {
       if (!upload) { setFormError('Добавьте фотографию'); return; }
       const memory: Memory = {
         id: modal.memory?.id || uniqueId(), title: value('title'), date: value('date'),
         image: upload, note: value('note'), location: value('location'), favorite: modal.memory?.favorite || false,
       };
+      savedMemory = memory;
       success = await update(previous => ({ ...previous, memories: modal.memory
         ? previous.memories.map(item => item.id === memory.id ? memory : item)
         : [memory, ...previous.memories] }));
@@ -220,7 +260,11 @@ export default function App({ session, onSession, onSave, connected, onReconnect
         ? previous.plans.map(item => item.id === plan.id ? plan : item)
         : [...previous.plans, plan] }));
     }
-    if (success) { setModal(null); notify('Сохранено'); }
+    if (success) {
+      setModal(null);
+      if (savedMemory) { setStoryYear(savedMemory.date.slice(0, 4)); if (modal?.type === 'memory' && !modal.memory) setStoryPage(0); setStoryView('pages'); }
+      notify('Сохранено');
+    }
   }
   async function togglePlan(plan: Plan) {
     if (await update(previous => ({ ...previous, plans: previous.plans.map(item => item.id === plan.id ? { ...item, done: !item.done } : item) }))) notify(plan.done ? 'Вернули в планы' : 'Готово 🤍');
@@ -284,12 +328,43 @@ export default function App({ session, onSession, onSave, connected, onReconnect
           </section>
         </>}
 
-        {page === 'memories' && <>
-          <div className="section-intro"><span className="section-kicker">ТО, ЧТО ОСТАЁТСЯ С НАМИ</span><h1>История</h1><p>Ваши моменты в фотографиях.</p></div>
-          <button className="add-button" onClick={() => open({ type: 'memory' })}><Camera size={19} />Добавить момент <Plus size={17} /></button>
-          {data.memories.length ? <div className="memory-grid">{[...data.memories].sort((a, b) => b.date.localeCompare(a.date)).map(memory => <button className="memory-tile" key={memory.id} onClick={() => open({ type: 'detail', memory })} aria-label={`Открыть момент: ${memory.title}`}><Photo src={memory.image} alt={memory.title} /><span><strong>{memory.title}</strong><small>{formatDate(memory.date)}</small></span></button>)}</div>
-            : <div className="empty-state"><Images size={29} /><h2>Здесь начнётся ваша история</h2><p>Сохраните первую фотографию вместе.</p></div>}
-        </>}
+        {page === 'memories' && <section className="story-section" aria-labelledby="story-title">
+          <div className="story-toolbar"><span className="section-kicker">СТРАНИЦЫ О НАС</span><div>
+            <button className={storyView !== 'grid' ? 'active' : ''} onClick={() => setStoryView('shelf')} aria-label="Книги воспоминаний" aria-pressed={storyView !== 'grid'}><BookOpen size={19} /></button>
+            <button className={storyView === 'grid' ? 'active' : ''} onClick={() => setStoryView('grid')} aria-label="Сетка фотографий" aria-pressed={storyView === 'grid'}><Grid2X2 size={18} /></button>
+          </div></div>
+          <div className="story-intro"><h1 id="story-title">История</h1><p>{memoryCountText(data.memories.length)} · {storyAlbums.length || 1} {countWord(storyAlbums.length || 1, 'книга', 'книги', 'книг')}</p></div>
+
+          {storyView === 'shelf' && <>
+            <div className="story-carousel" onTouchStart={event => { storyTouchX.current = event.touches[0].clientX; }} onTouchEnd={event => storySwipeEnd('shelf', event.changedTouches[0].clientX)}>
+              {shelfAlbums.map((album, index) => {
+                const position = index - selectedAlbumIndex;
+                return <button key={album.year} className={`story-cover ${position === 0 ? 'is-current' : position === -1 ? 'is-previous' : position === 1 ? 'is-next' : 'is-hidden'}`} tabIndex={Math.abs(position) <= 1 ? 0 : -1} aria-hidden={Math.abs(position) > 1} aria-label={`Книга ${album.year}, ${memoryCountText(album.memories.length)}`} onClick={() => { if (Date.now() - storyLastSwipe.current < 350) return; if (position === 0) { setStoryPage(0); setStoryView('pages'); } else setStoryYear(album.year); }}>
+                  {album.memories[0] && <Photo src={album.memories[0].image} alt="" />}
+                  <span className="story-cover-shade" />
+                  <span className="story-cover-copy"><small>SINCE US · {album.year}</small><strong>Наша<br />история</strong><em>{memoryCountText(album.memories.length)}</em></span>
+                  <span className="story-cover-spine" aria-hidden="true" />
+                </button>;
+              })}
+            </div>
+            <div className="story-shelf-caption"><strong>{selectedAlbum.year}</strong><span>{selectedAlbum.memories.length ? 'Коснись обложки, чтобы открыть' : 'Здесь появится ваша первая глава'}</span></div>
+            <div className="story-shelf-actions"><button className="story-round-button" onClick={() => moveStoryAlbum(-1)} disabled={selectedAlbumIndex === 0} aria-label="Предыдущая книга"><ChevronLeft size={21} /></button><button className="story-open-button" onClick={() => { setStoryPage(0); setStoryView('pages'); }}><BookOpen size={18} />Открыть книгу</button><button className="story-round-button" onClick={() => moveStoryAlbum(1)} disabled={selectedAlbumIndex === shelfAlbums.length - 1} aria-label="Следующая книга"><ChevronRight size={21} /></button></div>
+            <button className="story-add-button" onClick={() => open({ type: 'memory' })}><Plus size={18} />Добавить момент</button>
+          </>}
+
+          {storyView === 'pages' && <>
+            <div className="story-page-bar"><button onClick={() => setStoryView('shelf')}><ArrowLeft size={17} />К обложкам</button><span>{selectedAlbum.year}</span></div>
+            <div className="story-book-wrap" onTouchStart={event => { storyTouchX.current = event.touches[0].clientX; }} onTouchEnd={event => storySwipeEnd('pages', event.changedTouches[0].clientX)}>
+              {selectedMemory ? <div className={`story-spread flip-${storyFlip}`} key={selectedMemory.id}>
+                <div className="story-photo-page"><Photo src={selectedMemory.image} alt={selectedMemory.title} /></div>
+                <div className="story-copy-page"><small>СТРАНИЦА {String(Math.min(storyPage + 1, selectedAlbum.memories.length)).padStart(2, '0')}</small><h2>{selectedMemory.title}</h2>{selectedMemory.note && <p>{selectedMemory.note}</p>}<span>{dateText(selectedMemory.date)}{selectedMemory.location && <> · {selectedMemory.location}</>}</span></div>
+              </div> : <div className="story-empty-book"><BookOpen size={35} strokeWidth={1.2} /><h2>Первая страница ещё впереди</h2><p>Добавьте фотографию, которую хочется сохранить.</p><button onClick={() => open({ type: 'memory' })}><Plus size={17} />Добавить момент</button></div>}
+            </div>
+            {selectedMemory && <><div className="story-page-number">{Math.min(storyPage + 1, selectedAlbum.memories.length)} / {selectedAlbum.memories.length}</div><div className="story-page-actions"><button className="story-round-button" onClick={() => moveStoryPage(-1)} disabled={storyPage === 0} aria-label="Предыдущая страница"><ChevronLeft size={21} /></button><button className="story-round-button" onClick={() => open({ type: 'detail', memory: selectedMemory })} aria-label="Открыть момент"><Images size={19} /></button><button className="story-round-button" onClick={() => open({ type: 'memory' })} aria-label="Добавить момент"><Plus size={21} /></button><button className="story-round-button" onClick={() => moveStoryPage(1)} disabled={storyPage >= selectedAlbum.memories.length - 1} aria-label="Следующая страница"><ChevronRight size={21} /></button></div></>}
+          </>}
+
+          {storyView === 'grid' && <><button className="add-button" onClick={() => open({ type: 'memory' })}><Camera size={19} />Добавить момент <Plus size={17} /></button>{data.memories.length ? <div className="memory-grid">{[...data.memories].sort((a, b) => b.date.localeCompare(a.date)).map(memory => <button className="memory-tile" key={memory.id} onClick={() => open({ type: 'detail', memory })} aria-label={`Открыть момент: ${memory.title}`}><Photo src={memory.image} alt={memory.title} /><span><strong>{memory.title}</strong><small>{formatDate(memory.date)}</small></span></button>)}</div> : <div className="empty-state"><Images size={29} /><h2>Здесь начнётся ваша история</h2><p>Сохраните первую фотографию вместе.</p></div>}</>}
+        </section>}
 
         {page === 'dates' && <>
           <div className="section-intro"><span className="section-kicker">ВРЕМЯ ДРУГ ДЛЯ ДРУГА</span><h1>Свидания</h1><p>Важные дни и планы на двоих.</p></div>
