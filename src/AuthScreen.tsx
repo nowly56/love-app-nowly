@@ -6,7 +6,7 @@ export default function AuthScreen({ onRetry }: { onRetry: () => void }) {
     <section className="auth-story" aria-label="Since Us — пространство для двоих">
       <img className="auth-landscape" src="/photos/sunset.jpg" alt="Тёплый закат над морем" />
       <div className="auth-story-shade" />
-      <div className="auth-story-top"><a className="auth-brand" href="/" aria-label="Since Us, главная"><Heart fill="currentColor" strokeWidth={0} />Since Us</a><span className="auth-story-badge"><Heart size={13} /> создано для двоих</span></div>
+      <div className="auth-story-top"><a className="auth-brand" href="/" aria-label="Since Us, главная"><img src="/since-us-mark.png" width="44" height="44" alt="" />Since Us</a><span className="auth-story-badge"><Heart size={13} /> создано для двоих</span></div>
       <div className="auth-story-content">
         <span className="auth-story-kicker">МАЛЕНЬКИЕ МОМЕНТЫ. БОЛЬШОЕ ЧУВСТВО.</span>
         <h1>В целом мире.<br /><em>Только мы.</em></h1>

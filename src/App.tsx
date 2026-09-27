@@ -306,7 +306,7 @@ export default function App({ session, onSession, onSave, connected, onReconnect
   return <div className="app-shell">
     <div className="app-frame" ref={frameRef}>
       <header className="app-header">
-        <button className="wordmark" onClick={() => go('home')} aria-label="Since Us — на главную"><Heart size={18} strokeWidth={1.6} /><span>Since Us</span></button>
+        <button className="wordmark" onClick={() => go('home')} aria-label="Since Us — на главную"><img src="/since-us-mark.png" width="40" height="40" alt="" /><span>Since Us</span></button>
       </header>
 
       {!connected && <div className="connection-notice" role="status">Нет связи. Показаны последние данные. <button onClick={onReconnect}>Повторить</button></div>}

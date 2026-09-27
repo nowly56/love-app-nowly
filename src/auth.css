@@ -99,3 +99,4 @@
 }
 @media (max-width: 360px) { .auth-page { padding: 8px 8px 0; } .auth-story { height: 255px; padding: 19px; } .auth-story-badge { display: none; } .auth-story h1 { font-size: 36px; } .auth-form-side { padding: 25px 12px; } .auth-intro h2, .auth-recovery-result h2 { font-size: 32px; } .auth-code-panel { padding: 15px; } }
 @media (prefers-reduced-motion: reduce) { .auth-spinner { animation: none; } .auth-input-wrap { transition: none; } }
+.auth-brand > img { display: block; width: 44px; height: 44px; object-fit: contain; flex: none; }

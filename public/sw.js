@@ -1,6 +1,6 @@
 /* Production-only offline shell. Authenticated API data is never cached. */
 const CACHE_PREFIX = 'blizhe-pwa-';
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const PAGE_CACHE = `${CACHE_PREFIX}${CACHE_VERSION}-pages`;
 const ASSET_CACHE = `${CACHE_PREFIX}${CACHE_VERSION}-assets`;
 const LIVE_CACHES = new Set([PAGE_CACHE, ASSET_CACHE]);

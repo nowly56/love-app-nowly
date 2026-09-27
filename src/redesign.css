@@ -310,3 +310,4 @@ img { display: block; object-fit: cover; }
 .story-cover-copy strong { overflow-wrap: anywhere; font-size: clamp(25px,8vw,38px); }
 .edit-form select { width: 100%; min-height: 46px; padding: 12px; border: 1px solid #cdb8bb; border-radius: 14px; background: #fff9; color: inherit; font: inherit; }
 @media (prefers-reduced-motion: reduce) { .story-turning-leaf, .leaf-face::after { animation-duration: 1ms; } }
+.wordmark img { display: block; width: 40px; height: 40px; object-fit: contain; flex: none; }
