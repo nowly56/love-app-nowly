@@ -92,7 +92,7 @@ export default function AccountSettings({ session, onSession }: Props) {
   }
 
   return <div className="account-page">
-    <div className="section-intro"><span className="section-kicker">ТОЛЬКО ДЛЯ ВАС</span><h1>Настройки</h1><p>Самое важное о вашей истории.</p></div>
+    <div className="section-intro settings-intro"><h1>Настройки</h1><p>Самое важное о вашей истории.</p></div>
     <section className="settings-card couple-card" aria-labelledby="couple-title">
       <h2 id="couple-title">Ваше пространство</h2>
       <div className="couple-people"><div><Avatar image={own.avatar} name={own.name} /><span>{own.name}</span></div><Heart size={19} className="couple-heart" /><div><Avatar image={partner?.avatar || ''} name={partner?.name || 'Партнёр'} /><span>{partner?.name || 'Ждём партнёра'}</span></div></div>
