@@ -144,16 +144,17 @@ export default function App({ session, onSession, onSave, connected, onReconnect
   const plans = useMemo(() => [...data.plans].sort((a, b) => Number(a.done) - Number(b.done) || (a.date || '9999').localeCompare(b.date || '9999')), [data.plans]);
   const storyAlbums = useMemo(() => {
     const groups = new Map<string, Memory[]>();
-    for (const memory of [...data.memories].sort((a, b) => b.date.localeCompare(a.date))) {
+    for (const memory of [...data.memories].sort((a, b) => a.date.localeCompare(b.date))) {
       const year = memory.date.slice(0, 4);
       groups.set(year, [...(groups.get(year) || []), memory]);
     }
-    return [...groups].sort(([a], [b]) => b.localeCompare(a)).map(([year, memories]) => ({ year, memories }));
+    return [...groups].sort(([a], [b]) => a.localeCompare(b)).map(([year, memories]) => ({ year, memories }));
   }, [data.memories]);
   const shelfAlbums = storyAlbums.length ? storyAlbums : [{ year: currentDay.slice(0, 4), memories: [] as Memory[] }];
   const selectedAlbumIndex = Math.max(0, shelfAlbums.findIndex(album => album.year === storyYear));
   const selectedAlbum = shelfAlbums[selectedAlbumIndex];
-  const selectedMemory = selectedAlbum.memories[Math.min(storyPage, selectedAlbum.memories.length - 1)];
+  const storyPageCount = Math.max(2, selectedAlbum.memories.length);
+  const selectedMemory = selectedAlbum.memories[storyPage];
 
   useEffect(() => {
     const onHash = () => { setPage(routePage()); setModal(null); frameRef.current?.scrollTo(0, 0); };
@@ -171,7 +172,7 @@ export default function App({ session, onSession, onSave, connected, onReconnect
   }, [page, modal]);
   useEffect(() => { const timer = setInterval(() => setCurrentDay(todayString()), 60_000); return () => clearInterval(timer); }, []);
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
-  useEffect(() => { setStoryPage(current => Math.min(current, Math.max(0, selectedAlbum.memories.length - 1))); }, [selectedAlbum.year, selectedAlbum.memories.length]);
+  useEffect(() => { setStoryPage(current => Math.min(current, storyPageCount - 1)); }, [selectedAlbum.year, storyPageCount]);
 
   function go(next: Page) {
     window.location.hash = next;
@@ -185,7 +186,7 @@ export default function App({ session, onSession, onSave, connected, onReconnect
   }
   function moveStoryPage(direction: number) {
     setStoryFlip(direction > 0 ? 'next' : 'previous');
-    setStoryPage(previous => Math.max(0, Math.min(selectedAlbum.memories.length - 1, previous + direction)));
+    setStoryPage(previous => (previous + direction + storyPageCount) % storyPageCount);
   }
   function storySwipeEnd(mode: 'shelf' | 'pages', endX: number) {
     if (storyTouchX.current === null) return;
@@ -262,7 +263,17 @@ export default function App({ session, onSession, onSave, connected, onReconnect
     }
     if (success) {
       setModal(null);
-      if (savedMemory) { setStoryYear(savedMemory.date.slice(0, 4)); if (modal?.type === 'memory' && !modal.memory) setStoryPage(0); setStoryView('pages'); }
+      if (savedMemory) {
+        const savedYear = savedMemory.date.slice(0, 4);
+        const updatedMemories = modal?.type === 'memory' && modal.memory
+          ? data.memories.map(item => item.id === savedMemory.id ? savedMemory : item)
+          : [savedMemory, ...data.memories];
+        const savedPage = updatedMemories.filter(item => item.date.startsWith(savedYear))
+          .sort((a, b) => a.date.localeCompare(b.date)).findIndex(item => item.id === savedMemory.id);
+        setStoryYear(savedYear);
+        setStoryPage(Math.max(0, savedPage));
+        setStoryView('pages');
+      }
       notify('Сохранено');
     }
   }
@@ -355,15 +366,20 @@ export default function App({ session, onSession, onSave, connected, onReconnect
           {storyView === 'pages' && <>
             <div className="story-page-bar"><button onClick={() => setStoryView('shelf')}><ArrowLeft size={17} />К обложкам</button><span>{selectedAlbum.year}</span></div>
             <div className="story-book-wrap" onTouchStart={event => { storyTouchX.current = event.touches[0].clientX; }} onTouchEnd={event => storySwipeEnd('pages', event.changedTouches[0].clientX)}>
-              {selectedMemory ? <div className={`story-spread flip-${storyFlip}`} key={selectedMemory.id}>
-                <div className="story-photo-page"><Photo src={selectedMemory.image} alt={selectedMemory.title} /></div>
-                <div className="story-copy-page"><small>СТРАНИЦА {String(Math.min(storyPage + 1, selectedAlbum.memories.length)).padStart(2, '0')}</small><h2>{selectedMemory.title}</h2>{selectedMemory.note && <p>{selectedMemory.note}</p>}<span>{dateText(selectedMemory.date)}{selectedMemory.location && <> · {selectedMemory.location}</>}</span></div>
-              </div> : <div className="story-empty-book"><BookOpen size={35} strokeWidth={1.2} /><h2>Первая страница ещё впереди</h2><p>Добавьте фотографию, которую хочется сохранить.</p><button onClick={() => open({ type: 'memory' })}><Plus size={17} />Добавить момент</button></div>}
+              <div className={`story-spread flip-${storyFlip}`} key={`${selectedAlbum.year}-${storyPage}-${selectedMemory?.id || 'blank'}`}>
+                {selectedMemory ? <>
+                  <div className="story-photo-page"><Photo src={selectedMemory.image} alt={selectedMemory.title} /></div>
+                  <div className="story-copy-page"><small>СТРАНИЦА {String(storyPage + 1).padStart(2, '0')}</small><h2>{selectedMemory.title}</h2>{selectedMemory.note && <p>{selectedMemory.note}</p>}<span>{dateText(selectedMemory.date)}{selectedMemory.location && <> · {selectedMemory.location}</>}</span></div>
+                </> : <>
+                  <div className="story-photo-page story-blank-page"><Heart size={40} strokeWidth={1.1} /><span>SINCE US</span></div>
+                  <div className="story-copy-page"><small>СТРАНИЦА {String(storyPage + 1).padStart(2, '0')}</small><h2>{storyPage === 0 ? 'Первая страница ещё впереди' : 'Здесь будет ваша история'}</h2><p>{storyPage === 0 ? 'Добавьте фотографию, которую хочется сохранить.' : 'Каждый новый момент может стать страницей вашей книги.'}</p><button className="story-blank-add" onClick={() => open({ type: 'memory' })}><Plus size={15} />Добавить момент</button></div>
+                </>}
+              </div>
             </div>
-            {selectedMemory && <><div className="story-page-number">{Math.min(storyPage + 1, selectedAlbum.memories.length)} / {selectedAlbum.memories.length}</div><div className="story-page-actions"><button className="story-round-button" onClick={() => moveStoryPage(-1)} disabled={storyPage === 0} aria-label="Предыдущая страница"><ChevronLeft size={21} /></button><button className="story-round-button" onClick={() => open({ type: 'detail', memory: selectedMemory })} aria-label="Открыть момент"><Images size={19} /></button><button className="story-round-button" onClick={() => open({ type: 'memory' })} aria-label="Добавить момент"><Plus size={21} /></button><button className="story-round-button" onClick={() => moveStoryPage(1)} disabled={storyPage >= selectedAlbum.memories.length - 1} aria-label="Следующая страница"><ChevronRight size={21} /></button></div></>}
+            <div className="story-page-number">{storyPage + 1} / {storyPageCount}</div><div className="story-page-actions"><button className="story-round-button" onClick={() => moveStoryPage(-1)} aria-label="Предыдущая страница"><ChevronLeft size={21} /></button>{selectedMemory && <button className="story-round-button" onClick={() => open({ type: 'detail', memory: selectedMemory })} aria-label="Открыть момент"><Images size={19} /></button>}<button className="story-round-button" onClick={() => open({ type: 'memory' })} aria-label="Добавить момент"><Plus size={21} /></button><button className="story-round-button" onClick={() => moveStoryPage(1)} aria-label="Следующая страница"><ChevronRight size={21} /></button></div>
           </>}
 
-          {storyView === 'grid' && <><button className="add-button" onClick={() => open({ type: 'memory' })}><Camera size={19} />Добавить момент <Plus size={17} /></button>{data.memories.length ? <div className="memory-grid">{[...data.memories].sort((a, b) => b.date.localeCompare(a.date)).map(memory => <button className="memory-tile" key={memory.id} onClick={() => open({ type: 'detail', memory })} aria-label={`Открыть момент: ${memory.title}`}><Photo src={memory.image} alt={memory.title} /><span><strong>{memory.title}</strong><small>{formatDate(memory.date)}</small></span></button>)}</div> : <div className="empty-state"><Images size={29} /><h2>Здесь начнётся ваша история</h2><p>Сохраните первую фотографию вместе.</p></div>}</>}
+          {storyView === 'grid' && <><button className="add-button" onClick={() => open({ type: 'memory' })}><Camera size={19} />Добавить момент <Plus size={17} /></button>{data.memories.length ? <div className="memory-grid">{[...data.memories].sort((a, b) => a.date.localeCompare(b.date)).map(memory => <button className="memory-tile" key={memory.id} onClick={() => open({ type: 'detail', memory })} aria-label={`Открыть момент: ${memory.title}`}><Photo src={memory.image} alt={memory.title} /><span><strong>{memory.title}</strong><small>{formatDate(memory.date)}</small></span></button>)}</div> : <div className="empty-state"><Images size={29} /><h2>Здесь начнётся ваша история</h2><p>Сохраните первую фотографию вместе.</p></div>}</>}
         </section>}
 
         {page === 'dates' && <>
